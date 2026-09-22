@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+.superpowers
+docs
+coverage
+test-results
+playwright-report
+*.tsbuildinfo
+.env.local
+.env.*.local
+Dockerfile
+.dockerignore

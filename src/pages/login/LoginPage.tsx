@@ -7,7 +7,7 @@ import { ApiError, client, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
-import { Button, Spinner, TextField } from "../../shared/ui";
+import { Button, ButtonLink, Spinner, TextField } from "../../shared/ui";
 import styles from "./LoginPage.module.css";
 
 /** The refusals the identity-provider callback sends back as `/login?error=<code>`. */
@@ -56,14 +56,13 @@ export function LoginPage() {
           {config.data.localLogin && <LoginForm />}
           {config.data.localLogin && config.data.oidc.enabled && <p className={styles.or}>{t("login.or")}</p>}
           {config.data.oidc.enabled && (
-            // A plain navigation: the identity provider takes over the whole page.
-            <form method="get" action={OIDC_START_PATH}>
-              <Button type="submit" variant={config.data.localLogin ? "secondary" : "primary"}>
-                {config.data.oidc.displayName
-                  ? fill(t("login.oidc"), { name: config.data.oidc.displayName })
-                  : t("login.oidcGeneric")}
-              </Button>
-            </form>
+            // A link, not a form: the identity provider takes over the whole page,
+            // and CSP `form-action 'self'` would block a form's redirect to it.
+            <ButtonLink href={OIDC_START_PATH} variant={config.data.localLogin ? "secondary" : "primary"}>
+              {config.data.oidc.displayName
+                ? fill(t("login.oidc"), { name: config.data.oidc.displayName })
+                : t("login.oidcGeneric")}
+            </ButtonLink>
           )}
           {!config.data.localLogin && !config.data.oidc.enabled && <p>{t("login.unavailable")}</p>}
         </div>

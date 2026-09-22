@@ -1,0 +1,79 @@
+# Rendered at container start by the official image's envsubst step
+# (/etc/nginx/templates -> /etc/nginx/conf.d), inside nginx.conf's http block.
+# Only BACKEND_ORIGIN and NGINX_LOCAL_RESOLVERS are substituted
+# (NGINX_ENVSUBST_FILTER in the Dockerfile); every other $name is nginx's own.
+# The script-src hash placeholder is filled at image build time by csp-hash.mjs.
+
+server_tokens off;
+
+# The client's scheme as seen by the outermost proxy, when there is one.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
+# Hashed build output never changes under its name; everything else is
+# revalidated, so a deploy is picked up on the next load. An empty value
+# adds no header: the backend's own caching headers pass through untouched.
+map $uri $cache_control {
+    ~^/assets/ "public, max-age=31536000, immutable";
+    ~^/api/    "";
+    /healthz   "no-store";
+    default    "no-cache";
+}
+
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # Set once here and in no location: a location with its own add_header
+    # would silently drop every header inherited from this level.
+    add_header Cache-Control $cache_control;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' '__PREPAINT_SCRIPT_HASH__'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Liveness plus the one thing this container exists for: the build is in place.
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        if (!-f $document_root/index.html) {
+            return 503 "no build\n";
+        }
+        return 200 "ok\n";
+    }
+
+    # A missing hashed file is a 404, never index.html under an immutable cache.
+    location /assets/ {
+        try_files $uri =404;
+    }
+
+    location /api/ {
+        # Resolved per request (nameservers from /etc/resolv.conf), so nginx
+        # starts before the backend exists and follows it across restarts.
+        resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+        set $backend_origin "${BACKEND_ORIGIN}";
+        # Origin only, no URI part: the request URI is passed unchanged.
+        proxy_pass $backend_origin;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Real-IP $remote_addr;
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        # The admin API takes JSON documents (policies, settings, prices), not uploads.
+        client_max_body_size 1m;
+    }
+
+    # Client-side routes: any other path is the application.
+    location / {
+        try_files $uri /index.html;
+    }
+}

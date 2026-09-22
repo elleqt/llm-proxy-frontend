@@ -8,7 +8,8 @@ import { App } from "./app/App";
 import { createQueryClient } from "./app/queryClient";
 import { routes } from "./app/routes";
 
-const router = createBrowserRouter(routes, { basename: import.meta.env.BASE_URL });
+// Served at the site root only: asset URLs and routes are absolute from "/".
+const router = createBrowserRouter(routes);
 const queryClient = createQueryClient((to) => void router.navigate(to, { replace: true }));
 
 const root = document.getElementById("root");

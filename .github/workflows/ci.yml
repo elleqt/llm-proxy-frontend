@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Generated API types match api/openapi.yaml
+        run: |
+          npm run gen:api
+          git diff --exit-code
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: llm-proxy-frontend:ci
+      - name: Serves the build and reports healthy
+        run: |
+          docker run -d --name frontend -e BACKEND_ORIGIN=http://127.0.0.1:9 llm-proxy-frontend:ci
+          for _ in $(seq 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' frontend)
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          docker exec frontend wget -qO- http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          [ "$status" = healthy ] || { docker logs frontend; exit 1; }

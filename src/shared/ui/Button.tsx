@@ -49,3 +49,21 @@ export function Button({
     </button>
   );
 }
+
+export interface ButtonLinkProps extends ComponentProps<"a"> {
+  href: string;
+  variant?: "primary" | "secondary";
+}
+
+/**
+ * A navigation that looks like a button: leaving the application (a full-page
+ * redirect such as sign-in with the identity provider) is a link, not a form,
+ * so the CSP's `form-action 'self'` never sees the cross-origin redirect.
+ */
+export function ButtonLink({ variant = "secondary", className, children, ...rest }: ButtonLinkProps) {
+  return (
+    <a {...rest} className={[styles.button, styles[variant], className].filter(Boolean).join(" ")}>
+      {children}
+    </a>
+  );
+}

@@ -39,15 +39,15 @@ describe("/login", () => {
     renderApp("/login");
 
     expect(await screen.findByLabelText(en["login.email"])).toBeInTheDocument();
-    const idp = screen.getByRole("button", { name: "Sign in with Example ID" });
-    expect(idp.closest("form")).toHaveAttribute("action", "/api/auth/oidc/start");
+    const idp = screen.getByRole("link", { name: "Sign in with Example ID" });
+    expect(idp).toHaveAttribute("href", "/api/auth/oidc/start");
   });
 
   it("offers no form when local sign-in is off", async () => {
     authConfig({ localLogin: false, oidc: { enabled: true } });
     renderApp("/login");
 
-    expect(await screen.findByRole("button", { name: en["login.oidcGeneric"] })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: en["login.oidcGeneric"] })).toBeInTheDocument();
     expect(screen.queryByLabelText(en["login.email"])).not.toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe("/login", () => {
     renderApp("/login");
 
     expect(await screen.findByLabelText(en["login.email"])).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Sign in with/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Sign in with/ })).not.toBeInTheDocument();
   });
 
   it("says sign-in is unavailable when neither is offered", async () => {

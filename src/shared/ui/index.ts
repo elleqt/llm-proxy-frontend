@@ -1,5 +1,5 @@
 export { Badge, type BadgeProps } from "./Badge";
-export { Button, type ButtonProps } from "./Button";
+export { Button, ButtonLink, type ButtonLinkProps, type ButtonProps } from "./Button";
 export { Card, type CardProps } from "./Card";
 export { Chart, type ChartProps, type ChartSeries } from "./Chart";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
