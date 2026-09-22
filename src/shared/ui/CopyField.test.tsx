@@ -36,7 +36,7 @@ describe("CopyField", () => {
     expect(screen.getByRole("status")).toHaveTextContent(en["ui.copied"]);
   });
 
-  it("tells the user to copy by hand when the clipboard refuses", async () => {
+  it("when the clipboard refuses, selects the value and tells the user to copy it", async () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new DOMException("denied", "NotAllowedError"));
     renderField();
@@ -44,7 +44,18 @@ describe("CopyField", () => {
     await user.click(screen.getByRole("button", { name: en["ui.copy"] }));
 
     expect(screen.getByRole("status")).toHaveTextContent(en["ui.copyFailed"]);
-    expect(screen.getByRole("button", { name: en["ui.copy"] })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "New key" })).toHaveFocus();
+    expect(document.getSelection()?.toString()).toBe(SECRET);
+  });
+
+  it("lets the keyboard reach the value with it selected", async () => {
+    const user = userEvent.setup();
+    renderField();
+
+    await user.tab();
+
+    expect(screen.getByRole("textbox", { name: "New key" })).toHaveFocus();
+    expect(document.getSelection()?.toString()).toBe(SECRET);
   });
 
   it("speaks the interface language", () => {

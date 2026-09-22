@@ -1,6 +1,7 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
+import { useT } from "../i18n";
 import styles from "./Chart.module.css";
 
 export interface ChartSeries {
@@ -52,7 +53,7 @@ const FONT = "12px system-ui, sans-serif";
 // Seven tokens give three usable line colours; dashes tell further series apart.
 const DASHES: number[][] = [[], [6, 4], [2, 3]];
 
-function options(palette: Palette, series: readonly ChartSeries[], width: number, height: number): uPlot.Options {
+function options(palette: Palette, labels: readonly string[], width: number, height: number): uPlot.Options {
   const lineColors = [palette["--accent"], palette["--fg"], palette["--dim"]];
   const axis: uPlot.Axis = {
     stroke: palette["--dim"],
@@ -65,8 +66,8 @@ function options(palette: Palette, series: readonly ChartSeries[], width: number
     height,
     series: [
       {},
-      ...series.map((s, i) => ({
-        label: s.label,
+      ...labels.map((label, i) => ({
+        label,
         stroke: lineColors[i % lineColors.length] ?? palette["--accent"],
         dash: DASHES[Math.floor(i / lineColors.length) % DASHES.length] ?? [],
         width: 2,
@@ -81,38 +82,60 @@ function options(palette: Palette, series: readonly ChartSeries[], width: number
 /**
  * A thin uPlot wrapper. It draws what it is given and computes nothing. uPlot
  * is loaded on first use, keeping it out of the bundle for pages without charts.
+ *
+ * New `data` is handed to the existing plot. The plot is rebuilt only when
+ * what it looks like changes: the series labels, the height or the theme — so
+ * a caller may pass a fresh `series` array on every render.
  */
 export function Chart({ label, data, series, height = 240 }: ChartProps) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const dataRef = useRef(data);
+  const [failed, setFailed] = useState(false);
   const palette = useSyncExternalStore(subscribePalette, readPalette);
+  const labels = JSON.stringify(series.map((s) => s.label));
 
-  // (Re)build on anything that changes the options: colours, series, size.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     let cancelled = false;
     let resize: ResizeObserver | null = null;
-    void import("uplot").then(({ default: UPlot }) => {
-      if (cancelled) return;
-      const plot = new UPlot(options(parsePalette(palette), series, container.clientWidth, height), dataRef.current, container);
-      plotRef.current = plot;
-      resize = new ResizeObserver(() => plot.setSize({ width: container.clientWidth, height }));
-      resize.observe(container);
-    });
+    void import("uplot").then(
+      ({ default: UPlot }) => {
+        if (cancelled) return;
+        let width = container.clientWidth;
+        const plot = new UPlot(
+          options(parsePalette(palette), JSON.parse(labels) as string[], width, height),
+          dataRef.current,
+          container,
+        );
+        plotRef.current = plot;
+        resize = new ResizeObserver(() => {
+          if (container.clientWidth === width) return;
+          width = container.clientWidth;
+          plot.setSize({ width, height });
+        });
+        resize.observe(container);
+      },
+      // The chunk is gone, e.g. a tab opened before a redeploy.
+      () => {
+        if (!cancelled) setFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
       resize?.disconnect();
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [palette, series, height]);
+  }, [palette, labels, height]);
 
   useEffect(() => {
     dataRef.current = data;
     plotRef.current?.setData(data);
   }, [data]);
 
-  return <div ref={containerRef} role="img" aria-label={label} className={styles.chart} />;
+  if (failed) return <p className={styles.failed}>{t("ui.chartFailed")}</p>;
+  return <div ref={containerRef} role="img" aria-label={label} className={styles.chart} style={{ minHeight: height }} />;
 }

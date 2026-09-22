@@ -1,9 +1,17 @@
-import type { ButtonHTMLAttributes, MouseEvent } from "react";
+import type { ComponentProps, MouseEvent } from "react";
 import styles from "./Button.module.css";
 import { Spinner } from "./Spinner";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary";
+export interface ButtonProps extends ComponentProps<"button"> {
+  /**
+   * `primary`: the one safe forward action of a view. `danger`: destroys
+   * something (revoke, block, delete) — marked by weight and a glyph rather
+   * than colour, since the palette has no red. Never make a destructive action
+   * `primary`. Its confirmation dialog passes Cancel as the Modal's
+   * `initialFocus`, and the confirm button repeats verb and object
+   * ("Revoke key", "Block Alice"), never "OK".
+   */
+  variant?: "primary" | "secondary" | "danger";
   /**
    * A long action is running. The button stays focusable (a disabled button
    * would drop focus mid-action) but ignores clicks and does not submit.
@@ -36,7 +44,7 @@ export function Button({
       aria-disabled={busy || rest["aria-disabled"]}
       onClick={handleClick}
     >
-      {busy && <Spinner />}
+      {busy ? <Spinner /> : variant === "danger" && <span aria-hidden="true">⚠</span>}
       {children}
     </button>
   );

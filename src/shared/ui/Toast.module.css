@@ -25,8 +25,7 @@
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 15%, transparent);
+  border-radius: 8px;
   pointer-events: auto;
   animation: enter 0.2s ease-out;
 }
@@ -43,7 +42,7 @@
   color: var(--dim);
   background: none;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
 

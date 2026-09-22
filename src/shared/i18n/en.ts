@@ -52,11 +52,12 @@ export const en = {
 
   "ui.copy": "Copy",
   "ui.copied": "Copied",
-  "ui.copyFailed": "Could not copy. Select the value and copy it by hand.",
+  "ui.copyFailed": "Could not copy automatically. The value is selected: copy it with Ctrl+C (⌘C on a Mac).",
   "ui.shownOnce": "Save it now: it will not be shown again.",
   "ui.close": "Close",
   "ui.dismiss": "Dismiss",
   "ui.notifications": "Notifications",
+  "ui.chartFailed": "The chart could not be loaded. Reload the page to try again.",
 };
 
 export type MessageKey = keyof typeof en;

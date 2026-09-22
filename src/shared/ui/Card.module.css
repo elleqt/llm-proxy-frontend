@@ -2,7 +2,7 @@
   padding: 1rem 1.25rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .header {

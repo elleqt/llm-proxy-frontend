@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import styles from "./CopyField.module.css";
 
@@ -13,11 +13,17 @@ const CONFIRMATION_MS = 2000;
 /**
  * Shows a secret once. The value lives only in the caller's props: nothing is
  * cached, stored or put in the address, so it is gone when this unmounts.
+ *
+ * The value is a read-only, focusable text box that selects itself on focus,
+ * so copying by hand works from the keyboard too. When the clipboard API
+ * fails (permission denied, or an insecure context without one), focus moves
+ * to the value with it selected and the user is told to copy it.
  */
 export function CopyField({ label, value }: CopyFieldProps) {
   const t = useT();
   const labelId = useId();
   const warningId = useId();
+  const valueRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
@@ -32,6 +38,7 @@ export function CopyField({ label, value }: CopyFieldProps) {
       setStatus("copied");
     } catch {
       setStatus("failed");
+      valueRef.current?.focus();
     }
   };
 
@@ -41,7 +48,17 @@ export function CopyField({ label, value }: CopyFieldProps) {
         {label}
       </div>
       <div className={styles.row}>
-        <code className={styles.value}>{value}</code>
+        <code
+          ref={valueRef}
+          role="textbox"
+          aria-readonly="true"
+          aria-labelledby={labelId}
+          tabIndex={0}
+          className={styles.value}
+          onFocus={(event) => document.getSelection()?.selectAllChildren(event.currentTarget)}
+        >
+          {value}
+        </code>
         <button type="button" className={styles.copy} onClick={() => void copy()}>
           {status === "copied" ? t("ui.copied") : t("ui.copy")}
         </button>
