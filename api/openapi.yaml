@@ -13,6 +13,13 @@ info:
     - A restricted session (temporary password not yet changed) may call only
       `GET /api/me`, `POST /api/auth/password` and `POST /api/auth/logout`; every
       other authenticated endpoint answers 403 with code `password_change_required`.
+    - An authenticated endpoint called without a valid session answers 401 with code
+      `unauthenticated`. The only other 401 code is `invalid_credentials`, and it is
+      returned only by `POST /api/auth/login` and `POST /api/auth/password`, where it
+      rejects what was typed and leaves the session alone: a client must not treat it
+      as a signed-out session.
+    - Every error the web API writes, including those from its middleware (session,
+      restriction, content type), is a JSON `Error` - never plain text.
     - Every error body is `Error`. Clients render text from `code`, never from
       `message`, so the interface stays translatable.
     - Timestamps are RFC 3339 in UTC. Ids are UUIDs unless stated otherwise.
