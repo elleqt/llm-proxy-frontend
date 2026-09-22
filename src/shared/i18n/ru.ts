@@ -104,6 +104,7 @@ export const ru: Messages = {
   "issue.label": "Ярлык",
   "issue.labelHint": "Чтобы отличать ключи: например, компьютер или программа, для которых он.",
   "issue.labelRequired": "Введите ярлык.",
+  "issue.labelInvalid": "От 1 до 64 символов, без управляющих символов.",
   "issue.submit": "Выпустить",
   "issue.issuedTitle": "Ваш новый ключ",
   "issue.secretLabel": "Ключ «{label}»",

@@ -104,6 +104,7 @@ export const en = {
   "issue.label": "Label",
   "issue.labelHint": "To tell keys apart, e.g. the computer or tool it is for.",
   "issue.labelRequired": "Enter a label.",
+  "issue.labelInvalid": "Use 1 to 64 characters, without control characters.",
   "issue.submit": "Issue",
   "issue.issuedTitle": "Your new key",
   "issue.secretLabel": "Key “{label}”",

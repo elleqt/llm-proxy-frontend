@@ -87,7 +87,10 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const fieldError = issue.error instanceof ApiError && issue.error.field === "label" ? errorMessage(issue.error) : null;
+  // The server's refusal of the label belongs on the label field, in words about the label.
+  const refusal = issue.error instanceof ApiError && issue.error.field === "label" ? issue.error : null;
+  const fieldError =
+    refusal === null ? null : refusal.code === "invalid_input" ? t("issue.labelInvalid") : errorMessage(refusal);
   return (
     <Modal open onClose={onClose} title={t("issue.open")}>
       <form className={styles.form} onSubmit={submit} noValidate>
@@ -95,7 +98,8 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
           label={t("issue.label")}
           hint={t("issue.labelHint")}
           value={label}
-          maxLength={80}
+          // IssueTokenRequest.label: 1..64 printable characters.
+          maxLength={64}
           autoComplete="off"
           autoFocus
           onChange={(event) => setLabel(event.target.value)}

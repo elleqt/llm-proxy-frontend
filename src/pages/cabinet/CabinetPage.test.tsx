@@ -164,6 +164,28 @@ describe("issuing a key", () => {
   });
 });
 
+describe("a label the server refuses", () => {
+  it("is marked on the label field, not as a general failure", async () => {
+    cabinet([]);
+    server.use(
+      http.post("/api/me/tokens", ({ response }) =>
+        response(422).json({ code: "invalid_input", message: "bad label", field: "label" }),
+      ),
+    );
+    renderApp("/");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: en["issue.open"] }));
+    await user.type(screen.getByLabelText(en["issue.label"]), "tab\there");
+    await user.click(screen.getByRole("button", { name: en["issue.submit"] }));
+
+    const field = screen.getByLabelText(en["issue.label"]);
+    await waitFor(() => expect(field).toHaveAttribute("aria-invalid", "true"));
+    expect(field).toHaveAccessibleDescription(`${en["issue.labelHint"]} ${en["issue.labelInvalid"]}`);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
 describe("revoking a key", () => {
   it("names the key in the confirmation and revokes only on confirm", async () => {
     const laptop = fixtures.token({ label: "laptop" });
