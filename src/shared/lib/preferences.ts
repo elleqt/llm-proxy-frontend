@@ -4,6 +4,8 @@
 
 export const THEMES = ["auto", "light", "pink", "dark"] as const;
 export const LANGS = ["en", "ru"] as const;
+/** The order the language switch shows them in, as on the instruction page. */
+export const LANG_DISPLAY_ORDER: readonly Lang[] = ["ru", "en"];
 
 export type Theme = (typeof THEMES)[number];
 export type Lang = (typeof LANGS)[number];

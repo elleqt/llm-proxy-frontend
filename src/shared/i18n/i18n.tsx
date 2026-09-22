@@ -1,4 +1,4 @@
-import { createContext, use, useState, type ReactNode } from "react";
+import { createContext, use, useEffect, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { applyLang, currentLang, type Lang } from "../lib/preferences";
 import { en, type MessageKey, type Messages } from "./en";
@@ -15,6 +15,9 @@ const I18nContext = createContext<I18n | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState(currentLang);
+  useEffect(() => {
+    document.title = dictionaries[lang]["app.title"];
+  }, [lang]);
   const setLang = (next: Lang) => {
     applyLang(next);
     setLangState(next);
@@ -39,18 +42,28 @@ export function useT(): (key: MessageKey) => string {
 }
 
 /**
+ * A screen whose failures need their own wording: the key
+ * `errorIn.<context>.<code>` overrides `error.<code>` there. `password` is the
+ * change-password screen, where a 401 `invalid_credentials` means the current
+ * (or expired temporary) password, not a sign-in.
+ */
+export type ErrorContext = "password";
+
+/**
  * Text for a failure, from the dictionary by error code — never the server's
  * `message`. A code the dictionary does not know becomes a generic refusal
  * (403) or a generic failure, never the raw code.
  */
-export function errorMessage(messages: Messages, error: unknown): string {
+export function errorMessage(messages: Messages, error: unknown, context?: ErrorContext): string {
   if (!(error instanceof ApiError)) return messages["error.unknown"];
-  const key = `error.${error.code}`;
-  if (Object.hasOwn(messages, key)) return messages[key as MessageKey];
+  const keys = [`error.${error.code}`];
+  if (context !== undefined) keys.unshift(`errorIn.${context}.${error.code}`);
+  const key = keys.find((candidate) => Object.hasOwn(messages, candidate));
+  if (key !== undefined) return messages[key as MessageKey];
   return messages[error.status === 403 ? "error.forbidden" : "error.unknown"];
 }
 
-export function useErrorMessage(): (error: unknown) => string {
+export function useErrorMessage(context?: ErrorContext): (error: unknown) => string {
   const messages = dictionaries[useI18n().lang];
-  return (error) => errorMessage(messages, error);
+  return (error) => errorMessage(messages, error, context);
 }

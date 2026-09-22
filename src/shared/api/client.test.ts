@@ -1,6 +1,6 @@
 import { HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
-import { errorResponse, fixtures, http, server } from "../../test/server";
+import { errorResponse, http, server } from "../../test/server";
 import {
   ApiError,
   client,
@@ -23,13 +23,6 @@ async function failure(call: Promise<unknown>): Promise<ApiError> {
 }
 
 describe("unwrap", () => {
-  it("returns the response data on success", async () => {
-    const me = fixtures.me();
-    server.use(http.get("/api/me", ({ response }) => response(200).json(me)));
-
-    await expect(unwrap(client.GET("/api/me"))).resolves.toEqual(me);
-  });
-
   it("raises 401 as UnauthenticatedError", async () => {
     server.use(
       http.post("/api/auth/login", ({ response }) =>

@@ -1,17 +1,17 @@
 import type { Messages } from "./en";
 
 export const ru: Messages = {
-  "app.name": "llm-proxy",
+  "app.title": "llm-proxy — ключи и доступ",
   "app.loading": "Загрузка…",
 
   "prefs.theme": "Тема",
-  "prefs.theme.auto": "авто",
-  "prefs.theme.light": "светлая",
-  "prefs.theme.pink": "розовая",
-  "prefs.theme.dark": "тёмная",
+  "prefs.theme.auto": "Системная",
+  "prefs.theme.light": "Светлая",
+  "prefs.theme.pink": "Розовая",
+  "prefs.theme.dark": "Тёмная",
   "prefs.lang": "Язык",
-  "prefs.lang.en": "EN",
-  "prefs.lang.ru": "RU",
+  "prefs.lang.en": "English",
+  "prefs.lang.ru": "Русский",
 
   "page.login.title": "Вход",
   "page.password.title": "Смена пароля",
@@ -28,8 +28,11 @@ export const ru: Messages = {
   "error.unknown": "Что-то пошло не так. Попробуйте ещё раз.",
   "error.forbidden": "У вас нет прав на это действие.",
   "error.network_error": "Сервер недоступен. Проверьте соединение и попробуйте ещё раз.",
+  "error.unauthenticated": "Сеанс завершён. Войдите снова.",
   "error.password_change_required": "Смените временный пароль, чтобы продолжить.",
   "error.invalid_credentials": "Неверная почта или пароль.",
+  "errorIn.password.invalid_credentials":
+    "Текущий пароль неверен или срок временного пароля истёк. Если истёк — войдите заново.",
   "error.locked_out": "Слишком много неудачных попыток. Попробуйте позже.",
   "error.oidc_disabled": "Вход через провайдера учётных записей отключён.",
   "error.oidc_forbidden": "Вашей учётной записи у провайдера не разрешён доступ к сервису.",

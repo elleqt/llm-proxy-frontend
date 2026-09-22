@@ -1,15 +1,16 @@
 export const en = {
-  "app.name": "llm-proxy",
+  "app.title": "llm-proxy — API keys and access",
   "app.loading": "Loading…",
 
   "prefs.theme": "Theme",
-  "prefs.theme.auto": "auto",
-  "prefs.theme.light": "light",
-  "prefs.theme.pink": "pink",
-  "prefs.theme.dark": "dark",
+  "prefs.theme.auto": "System",
+  "prefs.theme.light": "Light",
+  "prefs.theme.pink": "Pink",
+  "prefs.theme.dark": "Dark",
   "prefs.lang": "Language",
-  "prefs.lang.en": "EN",
-  "prefs.lang.ru": "RU",
+  // Each language by its own name, identical in both dictionaries.
+  "prefs.lang.en": "English",
+  "prefs.lang.ru": "Русский",
 
   "page.login.title": "Sign in",
   "page.password.title": "Change password",
@@ -26,8 +27,12 @@ export const en = {
   "error.unknown": "Something went wrong. Try again.",
   "error.forbidden": "You are not allowed to do this.",
   "error.network_error": "The server could not be reached. Check your connection and try again.",
+  "error.unauthenticated": "Your session has ended. Sign in again.",
   "error.password_change_required": "Change your temporary password to continue.",
   "error.invalid_credentials": "Wrong email or password.",
+  // Context-specific overrides, looked up before `error.<code>` (see errorMessage).
+  "errorIn.password.invalid_credentials":
+    "The current password is wrong, or the temporary password has expired. If it has expired, sign in again.",
   "error.locked_out": "Too many failed attempts. Try again later.",
   "error.oidc_disabled": "Sign-in through the identity provider is turned off.",
   "error.oidc_forbidden": "Your identity-provider account is not allowed to use this service.",

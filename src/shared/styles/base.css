@@ -1,40 +1,45 @@
+/* Typography of the instruction page, which this interface continues. */
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  padding: 2rem 1.25rem 4rem;
   background: var(--bg);
   color: var(--fg);
-  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+
+h1 { font-size: 1.6rem; margin: 0 0 .35rem; letter-spacing: -.01em; }
+h2 { font-size: 1.1rem; margin: 2.5rem 0 .75rem; }
+h3 { font-size: .95rem; margin: 1.4rem 0 .4rem; }
+p { margin: .6rem 0; }
 
 a {
   color: var(--accent);
 }
 
 code, pre, kbd, samp {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.9em;
-}
-
-code {
-  background: var(--code);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .875rem;
 }
 
 pre {
   background: var(--code);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  padding: .9rem 1rem;
   overflow-x: auto;
+  margin: .6rem 0;
 }
 
-pre code {
-  background: none;
-  padding: 0;
+:not(pre) > code {
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: .05rem .3rem;
 }
 
 :focus-visible {

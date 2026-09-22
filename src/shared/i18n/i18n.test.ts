@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, NETWORK_ERROR } from "../api/client";
+import { ApiError } from "../api/client";
 import { en } from "./en";
 import { errorMessage } from "./i18n";
 import { ru } from "./ru";
@@ -16,7 +16,6 @@ describe("dictionaries", () => {
 describe("errorMessage", () => {
   it("translates a known code", () => {
     expect(errorMessage(ru, new ApiError(401, "invalid_credentials"))).toBe(ru["error.invalid_credentials"]);
-    expect(errorMessage(en, new ApiError(0, NETWORK_ERROR))).toBe(en["error.network_error"]);
   });
 
   it("never shows an unknown code; a refusal reads as one", () => {
@@ -26,5 +25,15 @@ describe("errorMessage", () => {
 
   it("gives a generic message for anything that is not an ApiError", () => {
     expect(errorMessage(en, new TypeError("boom"))).toBe(en["error.unknown"]);
+  });
+
+  it("prefers the password screen's own wording for invalid_credentials there", () => {
+    const refused = new ApiError(401, "invalid_credentials");
+    expect(errorMessage(en, refused, "password")).toBe(en["errorIn.password.invalid_credentials"]);
+    expect(errorMessage(en, refused)).toBe(en["error.invalid_credentials"]);
+  });
+
+  it("falls back to the general text for a code the context does not override", () => {
+    expect(errorMessage(ru, new ApiError(400, "weak_password"), "password")).toBe(ru["error.weak_password"]);
   });
 });

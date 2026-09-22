@@ -1,11 +1,12 @@
+// Global styles first, so every component's CSS module comes after them in the bundle.
+import "./shared/styles/tokens.css";
+import "./shared/styles/base.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter } from "react-router";
 import { App } from "./app/App";
 import { createQueryClient } from "./app/queryClient";
 import { routes } from "./app/routes";
-import "./shared/styles/tokens.css";
-import "./shared/styles/base.css";
 
 const router = createBrowserRouter(routes, { basename: import.meta.env.BASE_URL });
 const queryClient = createQueryClient((to) => void router.navigate(to, { replace: true }));
