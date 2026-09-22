@@ -62,7 +62,7 @@ describe("session guard", () => {
       ),
     );
     const { router } = renderApp("/connect");
-    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.unknown"]);
+    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.internal"]);
     expect(router.state.location.pathname).toBe("/connect");
   });
 });

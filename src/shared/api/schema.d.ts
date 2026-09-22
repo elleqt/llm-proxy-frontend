@@ -802,7 +802,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `locked_out` — too many failed attempts; see `Retry-After`. */
+            /** @description `locked_out` — too many failed attempts for this address; `rate_limited` — too many attempts from this client. Both carry `Retry-After`. */
             429: {
                 headers: {
                     "Retry-After"?: number;

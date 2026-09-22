@@ -115,14 +115,17 @@ describe("/login", () => {
     expect(screen.getByLabelText(en["login.email"])).toHaveValue("ada@example.com");
   });
 
-  it("says when to retry after locked_out, from Retry-After", async () => {
+  it.each([
+    ["locked_out", "login.lockedOutUntil"],
+    ["rate_limited", "login.rateLimitedUntil"],
+  ] as const)("says when to retry after %s, from Retry-After", async (code, message) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-23T10:00:30Z") });
     authConfig(both);
     server.use(
       http.post("/api/auth/login", ({ response }) =>
         response.untyped(
           HttpResponse.json(
-            { code: "locked_out", message: "locked out" },
+            { code, message: "" },
             { status: 429, headers: { "Retry-After": "300" } },
           ),
         ),
@@ -137,7 +140,7 @@ describe("/login", () => {
       new Date("2026-09-23T10:06:00Z"),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      en["login.lockedOutUntil"].replace("{time}", time),
+      en[message].replace("{time}", time),
     );
   });
 

@@ -48,6 +48,10 @@ export const en = {
   "error.login_failed": "The provider rejected the sign-in.",
   "error.invalid_settings": "The settings are not valid.",
   "error.forbidden_setting": "This setting is managed by the gateway and cannot be changed here.",
+  "error.unsupported_media_type": "The request was sent in a format the server does not accept. Reload the page and try again.",
+  "error.payload_too_large": "The request is too large.",
+  "error.rate_limited": "Too many attempts. Try again later.",
+  "error.internal": "The server failed to handle the request. Try again later.",
 
   "ui.copy": "Copy",
   "ui.copied": "Copied",
@@ -75,6 +79,7 @@ export const en = {
   "login.or": "or",
   "login.unavailable": "Sign-in is not available. Contact your administrator.",
   "login.lockedOutUntil": "Too many failed attempts. Try again after {time}.",
+  "login.rateLimitedUntil": "Too many attempts from this device. Try again after {time}.",
 
   "password.introRestricted": "You signed in with a temporary password. Choose your own to continue.",
   "password.current": "Current password",

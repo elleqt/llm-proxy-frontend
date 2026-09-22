@@ -20,6 +20,10 @@ info:
       as a signed-out session.
     - Every error the web API writes, including those from its middleware (session,
       restriction, content type), is a JSON `Error` - never plain text.
+    - Codes any endpoint may answer besides those it declares: `unsupported_media_type`
+      (415, a mutating request without `Content-Type: application/json`),
+      `payload_too_large` (413), `rate_limited` (429 with `Retry-After`, sign-in and
+      password endpoints only), `internal` (500).
     - Every error body is `Error`. Clients render text from `code`, never from
       `message`, so the interface stays translatable.
     - Timestamps are RFC 3339 in UTC. Ids are UUIDs unless stated otherwise.
@@ -75,7 +79,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429":
-          description: "`locked_out` — too many failed attempts; see `Retry-After`."
+          description: "`locked_out` — too many failed attempts for this address; `rate_limited` — too many attempts from this client. Both carry `Retry-After`."
           headers:
             Retry-After:
               schema: { type: integer, description: Seconds until the next attempt is accepted. }

@@ -48,6 +48,10 @@ export const ru: Messages = {
   "error.login_failed": "Провайдер отклонил вход.",
   "error.invalid_settings": "Настройки некорректны.",
   "error.forbidden_setting": "Эту настройку задаёт шлюз, здесь её изменить нельзя.",
+  "error.unsupported_media_type": "Запрос отправлен в формате, который сервер не принимает. Обновите страницу и попробуйте снова.",
+  "error.payload_too_large": "Запрос слишком большой.",
+  "error.rate_limited": "Слишком много попыток. Попробуйте позже.",
+  "error.internal": "Сервер не смог обработать запрос. Попробуйте позже.",
 
   "ui.copy": "Копировать",
   "ui.copied": "Скопировано",
@@ -75,6 +79,7 @@ export const ru: Messages = {
   "login.or": "или",
   "login.unavailable": "Вход недоступен. Обратитесь к администратору.",
   "login.lockedOutUntil": "Слишком много неудачных попыток. Повторите после {time}.",
+  "login.rateLimitedUntil": "Слишком много попыток с этого устройства. Повторите после {time}.",
 
   "password.introRestricted": "Вы вошли по временному паролю. Задайте свой, чтобы продолжить.",
   "password.current": "Текущий пароль",

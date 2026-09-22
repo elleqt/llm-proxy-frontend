@@ -13,11 +13,15 @@ import styles from "./LoginPage.module.css";
 /** The refusals the identity-provider callback sends back as `/login?error=<code>`. */
 const OIDC_ERRORS = ["oidc_forbidden", "oidc_failed"] as const;
 
-/** 429 `locked_out`, with the moment the next attempt is accepted when the server said. */
-class LockedOutError extends ApiError {
+/** The 429 refusals of sign-in; both say in `Retry-After` when to try again. */
+const RETRY_LATER = { locked_out: "login.lockedOutUntil", rate_limited: "login.rateLimitedUntil" } as const;
+type RetryLaterCode = keyof typeof RETRY_LATER;
+
+/** A 429 refusal with the moment the next attempt is accepted, when the server said. */
+class RetryLaterError extends ApiError {
   readonly retryAt: Date | null;
-  constructor(status: number, retryAfter: string | null) {
-    super(status, "locked_out");
+  constructor(status: number, code: RetryLaterCode, retryAfter: string | null) {
+    super(status, code);
     const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
     this.retryAt = Number.isFinite(seconds) && seconds >= 0 ? new Date(Date.now() + seconds * 1000) : null;
   }
@@ -28,9 +32,9 @@ async function signIn(body: components["schemas"]["LoginRequest"]) {
   try {
     return await unwrap(call);
   } catch (error) {
-    if (error instanceof ApiError && error.code === "locked_out") {
+    if (error instanceof ApiError && Object.hasOwn(RETRY_LATER, error.code)) {
       const { response } = await call;
-      throw new LockedOutError(error.status, response.headers.get("Retry-After"));
+      throw new RetryLaterError(error.status, error.code as RetryLaterCode, response.headers.get("Retry-After"));
     }
     throw error;
   }
@@ -94,11 +98,11 @@ function LoginForm() {
   };
 
   let failure: string | null = null;
-  if (login.error instanceof LockedOutError && login.error.retryAt !== null) {
+  if (login.error instanceof RetryLaterError && login.error.retryAt !== null) {
     // Rounded up to the minute: "after 14:06" must not be a moment the lock still holds.
     const retryAt = new Date(Math.ceil(login.error.retryAt.getTime() / 60_000) * 60_000);
     const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(retryAt);
-    failure = fill(t("login.lockedOutUntil"), { time });
+    failure = fill(t(RETRY_LATER[login.error.code as RetryLaterCode]), { time });
   } else if (login.isError) {
     failure = errorMessage(login.error);
   }
