@@ -217,4 +217,79 @@ describe("Modal", () => {
     expect(screen.queryByRole("button", { name: "Revoke laptop" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Keys" })).toHaveFocus();
   });
+
+  // The issue-key flow: the form dialog is replaced by the one-time-secret
+  // dialog (a new key), from the form's own submit button.
+  function Issue({ autoFocusResult }: { autoFocusResult: boolean }) {
+    const [step, setStep] = useState<"closed" | "form" | "issued">("closed");
+    return (
+      <I18nProvider>
+        <button type="button" onClick={() => setStep("form")}>
+          Issue a key
+        </button>
+        {step === "form" && (
+          <Modal key="form" open onClose={() => setStep("closed")} title="Issue a key">
+            <Button onClick={() => setStep("issued")}>Issue</Button>
+          </Modal>
+        )}
+        {step === "issued" && (
+          <Modal key="issued" open onClose={() => setStep("closed")} title="Your new key">
+            <TextField label="Key" readOnly value="sk-test" autoFocus={autoFocusResult} />
+          </Modal>
+        )}
+      </I18nProvider>
+    );
+  }
+
+  it.each([false, true])(
+    "returns focus to the original opener after one dialog replaces another (autoFocus in the second: %s)",
+    async (autoFocusResult) => {
+      const user = userEvent.setup();
+      render(<Issue autoFocusResult={autoFocusResult} />);
+
+      await user.click(screen.getByRole("button", { name: "Issue a key" }));
+      await user.click(screen.getByRole("button", { name: "Issue" }));
+      const issued = screen.getByRole("dialog", { name: "Your new key" });
+      expect(autoFocusResult ? screen.getByRole("textbox", { name: "Key" }) : issued).toHaveFocus();
+
+      await user.keyboard("{Escape}");
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Issue a key" })).toHaveFocus();
+    },
+  );
+
+  it("keeps the page inert until the last of two open dialogs closes, in any order", async () => {
+    function Two() {
+      const [open, setOpen] = useState({ a: true, b: true });
+      return (
+        <I18nProvider>
+          <p>Page</p>
+          <Modal open={open.a} onClose={() => setOpen((o) => ({ ...o, a: false }))} title="A">
+            A
+          </Modal>
+          <Modal open={open.b} onClose={() => setOpen((o) => ({ ...o, b: false }))} title="B">
+            <Button onClick={() => setOpen((o) => ({ ...o, a: false }))}>Close A</Button>
+          </Modal>
+        </I18nProvider>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Two />);
+    // The later dialog is on top: live, and the one below it is not.
+    expect(screen.getByRole("dialog", { name: "B" }).closest("[inert]")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "A" }).closest("[inert]")).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Close A" }));
+
+    expect(screen.queryByRole("dialog", { name: "A" })).not.toBeInTheDocument();
+    expect(screen.getByText("Page").closest("[inert]")).not.toBeNull();
+    expect(document.documentElement.style.overflow).toBe("hidden");
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Page").closest("[inert]")).toBeNull();
+    expect(document.documentElement.style.overflow).toBe("");
+  });
 });

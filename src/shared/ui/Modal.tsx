@@ -32,6 +32,8 @@ export interface ModalProps {
 
 /** Body children with this attribute stay live while a modal is open (the toast region). */
 export const LIVE_OUTSIDE_MODAL = "data-live-outside-modal";
+/** Marks each dialog's backdrop, the <body> child a Modal renders. */
+const BACKDROP = "data-modal-backdrop";
 
 const FOCUSABLE = [
   "a[href]",
@@ -51,6 +53,19 @@ const FOCUSABLE = [
 // Open dialogs, innermost last. Only the innermost one handles keys and focus.
 const stack: HTMLElement[] = [];
 let overflowBeforeLock = "";
+// How many open dialogs keep each page element inert. An element is only
+// released when the last of them closes, in whatever order they close.
+const inertHolds = new Map<Element, number>();
+// Where focus goes when a dialog closes and nothing better is known: the
+// opener of the dialog that started the current stack.
+let stackOrigin: HTMLElement | null = null;
+// Set when a closing dialog finds focus already inside the dialog replacing
+// it: that dialog inherits the closing one's return target as its opener.
+let handedOver: HTMLElement | null = null;
+
+function isFocusTarget(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element !== document.body && element.isConnected;
+}
 
 /**
  * A modal dialog rendered into <body>. While open, everything else on the page
@@ -78,8 +93,11 @@ function ModalDialog({
   const titleId = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  // Read during render, before this commit applies any child's autoFocus.
-  const [opener] = useState(() => document.activeElement);
+  // Read during render, before this commit applies any child's autoFocus. When
+  // this dialog replaces another in the same commit, that is the old dialog's
+  // control, gone by setup time; the setup then resolves the real opener.
+  const [renderOpener] = useState(() => document.activeElement);
+  const opener = useRef<HTMLElement | null>(null);
   const latest = useRef({ onClose, initialFocus, returnFocus });
   useLayoutEffect(() => {
     latest.current = { onClose, initialFocus, returnFocus };
@@ -94,15 +112,34 @@ function ModalDialog({
     if (!dialog || !backdrop) return;
     const root = document.documentElement;
 
+    const active = document.activeElement;
+    if (!isFocusTarget(opener.current)) {
+      opener.current = isFocusTarget(renderOpener)
+        ? renderOpener
+        : (handedOver ?? (isFocusTarget(active) && !dialog.contains(active) ? active : null));
+    }
+    handedOver = null;
+
     stack.push(dialog);
     if (stack.length === 1) {
       overflowBeforeLock = root.style.overflow;
       root.style.overflow = "hidden";
+      stackOrigin = opener.current;
     }
-    const inerted = [...document.body.children].filter(
-      (element) => element !== backdrop && !element.hasAttribute("inert") && !element.hasAttribute(LIVE_OUTSIDE_MODAL),
-    );
-    for (const element of inerted) element.setAttribute("inert", "");
+    const held = [...document.body.children].filter((element) => {
+      if (element === backdrop || element.hasAttribute(LIVE_OUTSIDE_MODAL)) return false;
+      // Dialogs mounted in the same commit register right after this one and
+      // go above it; do not make them inert.
+      if (element.hasAttribute(BACKDROP) && !stack.some((open) => element.contains(open))) return false;
+      const holds = inertHolds.get(element);
+      if (holds !== undefined) inertHolds.set(element, holds + 1);
+      else if (element.hasAttribute("inert")) return false; // inert for reasons of its own
+      else {
+        inertHolds.set(element, 1);
+        element.setAttribute("inert", "");
+      }
+      return true;
+    });
 
     const resume = focusedInside.current;
     if (resume?.isConnected) resume.focus();
@@ -164,23 +201,42 @@ function ModalDialog({
 
       const active = document.activeElement;
       focusedInside.current = active instanceof HTMLElement && dialog.contains(active) ? active : null;
-      for (const element of inerted) element.removeAttribute("inert");
+      for (const element of held) {
+        const holds = (inertHolds.get(element) ?? 1) - 1;
+        if (holds > 0) inertHolds.set(element, holds);
+        else {
+          inertHolds.delete(element);
+          element.removeAttribute("inert");
+        }
+      }
+      const wasTop = isTop();
       stack.splice(stack.indexOf(dialog), 1);
       if (stack.length === 0) root.style.overflow = overflowBeforeLock;
+      // A dialog below closing first leaves focus with the one above.
+      if (!wasTop) return;
 
-      // Focus can only land once the page is no longer inert.
-      if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) opener.focus();
-      if (opener === document.body || document.activeElement !== opener) {
-        const fallback = latest.current.returnFocus;
-        (fallback instanceof HTMLElement ? fallback : fallback?.current)?.focus();
+      const fallback = latest.current.returnFocus;
+      const target = [opener.current, fallback instanceof HTMLElement ? fallback : fallback?.current, stackOrigin].find(
+        isFocusTarget,
+      );
+      // A dialog that replaces this one in the same commit may already hold
+      // focus (autoFocus); leave it there and pass the target on.
+      if (active instanceof Element && active.closest("[aria-modal='true']")) {
+        handedOver = target ?? null;
+        return;
       }
+      // Focus can only land once the page is no longer inert.
+      target?.focus();
+      if (document.activeElement === document.body) stack[stack.length - 1]?.focus();
+      if (stack.length === 0) stackOrigin = null;
     };
     // Set up once per opening; the latest props are read through `latest`.
-  }, [opener]);
+  }, [renderOpener]);
 
   return createPortal(
     <div
       ref={backdropRef}
+      data-modal-backdrop=""
       className={styles.backdrop}
       onMouseDown={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose();
