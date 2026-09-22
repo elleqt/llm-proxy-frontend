@@ -25,6 +25,18 @@ describe("CopyField", () => {
     expect(field).toHaveAccessibleDescription(en["ui.shownOnce"]);
   });
 
+  it("describes the field by a caller's own warning instead", () => {
+    render(
+      <I18nProvider>
+        <CopyField label="Sign-in link" value="https://example.com/device" warning="Open it before the countdown ends." />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("group", { name: "Sign-in link" })).toHaveAccessibleDescription(
+      "Open it before the countdown ends.",
+    );
+  });
+
   it("copies the value through the clipboard API and confirms", async () => {
     const user = userEvent.setup();
     renderField();

@@ -6,6 +6,12 @@ export interface CopyFieldProps {
   label: ReactNode;
   /** The secret: a new token, a temporary password, a vendor sign-in link. */
   value: string;
+  /**
+   * Why the value must be taken now; the field's accessible description.
+   * Defaults to "it will not be shown again". A vendor sign-in link passes
+   * its own, e.g. that it expires with the countdown.
+   */
+  warning?: ReactNode;
 }
 
 const CONFIRMATION_MS = 2000;
@@ -19,7 +25,7 @@ const CONFIRMATION_MS = 2000;
  * fails (permission denied, or an insecure context without one), focus moves
  * to the value with it selected and the user is told to copy it.
  */
-export function CopyField({ label, value }: CopyFieldProps) {
+export function CopyField({ label, value, warning }: CopyFieldProps) {
   const t = useT();
   const labelId = useId();
   const warningId = useId();
@@ -64,7 +70,7 @@ export function CopyField({ label, value }: CopyFieldProps) {
         </button>
       </div>
       <p id={warningId} className={styles.warning}>
-        {t("ui.shownOnce")}
+        {warning ?? t("ui.shownOnce")}
       </p>
       <p role="status" className={status === "failed" ? styles.failed : styles.visuallyHidden}>
         {status === "copied" ? t("ui.copied") : status === "failed" ? t("ui.copyFailed") : ""}
