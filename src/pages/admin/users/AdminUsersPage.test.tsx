@@ -1,8 +1,9 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
+import { cached } from "../../../test/cache";
 import { renderApp } from "../../../test/render";
 import { fixtures, http, server, type Schemas } from "../../../test/server";
 
@@ -26,7 +27,8 @@ function acceptCreation(sent: Schemas["CreateUserRequest"][]) {
         kind: body.kind,
         displayName: body.displayName,
         email: body.email ?? null,
-        signIn: body.kind === "service" ? [] : [body.signIn ?? "password"],
+        signIn: body.kind === "human" && body.signIn === "password" ? ["password"] : [],
+        invitationExpiresAt: body.signIn === "oidc" ? "2026-09-30T09:00:00Z" : null,
         policy: body.policy,
       });
       return response(201).json(
@@ -48,12 +50,12 @@ async function fillHuman(user: UserEvent, signIn: "password" | "oidc") {
 }
 
 describe("creating accounts", () => {
-  it("shows a password user's temporary password once, with its expiry", async () => {
+  it("shows a password user's temporary password once, with its expiry, and keeps it in no cache", async () => {
     const sent: Schemas["CreateUserRequest"][] = [];
     admin([]);
     acceptCreation(sent);
     const user = userEvent.setup();
-    renderApp("/admin/users");
+    const { queryClient } = renderApp("/admin/users");
 
     await fillHuman(user, "password");
 
@@ -62,6 +64,7 @@ describe("creating accounts", () => {
     });
     expect(within(result).getByRole("textbox", { name: en["admin.tempPassword"] })).toHaveTextContent(TEMP_PASSWORD);
     expect(result).toHaveTextContent(/2026/);
+    await waitFor(() => expect(cached(queryClient)).not.toContain(TEMP_PASSWORD));
     expect(sent).toEqual([
       {
         kind: "human",
@@ -77,6 +80,7 @@ describe("creating accounts", () => {
     await user.click(screen.getByRole("button", { name: en["admin.createUser"] }));
     expect(screen.getByRole("dialog", { name: en["admin.createUser"] })).not.toHaveTextContent(TEMP_PASSWORD);
     expect(screen.queryByText(TEMP_PASSWORD)).not.toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain(TEMP_PASSWORD);
   });
 
   it("tells that an identity-provider user is claimed by their first sign-in, with no password", async () => {
@@ -185,6 +189,50 @@ describe("user list", () => {
 
     await user.type(screen.getByRole("searchbox", { name: en["admin.search"] }), "HEDY@");
     expect(names()).toEqual(["Hedy Example"]);
+  });
+
+  it("shows each account's first rules, how many more, and an IdP-owned policy", async () => {
+    admin([
+      fixtures.adminUser({ policy: ["claude:*", "chatgpt:gpt-6", "gemini:*"] }),
+      fixtures.adminUser({
+        id: "00000000-0000-4000-8000-0000000000b3",
+        displayName: "Hedy Example",
+        policy: ["gemini:*"],
+        policySource: "idp",
+      }),
+      fixtures.adminUser({ id: "00000000-0000-4000-8000-0000000000b4", displayName: "Linus Example", policy: [] }),
+    ]);
+    renderApp("/admin/users");
+    const row = async (name: string) => (await screen.findByRole("link", { name })).closest("tr") as HTMLElement;
+
+    const grace = await row("Grace Example");
+    expect(grace).toHaveTextContent("claude:*");
+    expect(grace).toHaveTextContent("chatgpt:gpt-6");
+    expect(grace).not.toHaveTextContent("gemini:*");
+    expect(grace).toHaveTextContent(fill(en["admin.policyMore"], { n: 1 }));
+    expect(grace).not.toHaveTextContent(en["admin.policyIdp"]);
+    expect(await row("Hedy Example")).toHaveTextContent(`gemini:*${en["admin.policyIdp"]}`);
+    expect(await row("Linus Example")).toHaveTextContent(en["admin.policyNone"]);
+  });
+
+  it("shows a pending or lapsed invitation where a person has no working sign-in yet", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-23T10:00:00Z") });
+    admin([
+      fixtures.adminUser({ signIn: [], invitationExpiresAt: "2026-09-30T09:00:00Z" }),
+      fixtures.adminUser({
+        id: "00000000-0000-4000-8000-0000000000b3",
+        displayName: "Alan Example",
+        signIn: [],
+        invitationExpiresAt: "2026-09-20T09:00:00Z",
+      }),
+    ]);
+    renderApp("/admin/users");
+    const row = async (name: string) => (await screen.findByRole("link", { name })).closest("tr") as HTMLElement;
+
+    expect(await row("Grace Example")).toHaveTextContent(fill(en["admin.invitationPending"], { time: "" }).trim());
+    expect(await row("Grace Example")).not.toHaveTextContent(en["admin.signIn.none"]);
+    expect(await row("Alan Example")).toHaveTextContent(en["admin.invitationLapsed"]);
+    vi.useRealTimers();
   });
 
   it("states an account that was never active", async () => {

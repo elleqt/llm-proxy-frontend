@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { en } from "../../../shared/i18n/en";
+import { ru } from "../../../shared/i18n/ru";
 import { fill } from "../../../shared/lib/template";
 import { renderApp } from "../../../test/render";
 import { fixtures, http, server, type Schemas } from "../../../test/server";
@@ -123,6 +124,39 @@ describe("price list", () => {
     expect(sent).toEqual([
       { provider: "claude", model: "claude-sonnet-5", input: 3, output: 12.5, cacheRead: 0.3, cacheWrite: 3.75 },
       { provider: "gemini", model: "gemini-3-pro", input: 1.25, output: 0, cacheRead: 0, cacheWrite: 0 },
+    ]);
+  });
+
+  it("shows prices with the interface's decimal mark and takes a comma, but no other number forms", async () => {
+    document.documentElement.setAttribute("data-lang", "ru");
+    settingsScreen([
+      { provider: "claude", model: "claude-sonnet-5", input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+    ]);
+    let sent: Schemas["ModelPrice"][] | undefined;
+    server.use(
+      http.put("/api/admin/prices", async ({ request, response }) => {
+        sent = await request.json();
+        return response(200).json(sent);
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+    const row = { row: "claude:claude-sonnet-5" };
+
+    expect(await screen.findByLabelText(fill(ru["prices.cacheReadLabel"], row))).toHaveValue("0,3");
+    const input = screen.getByLabelText(fill(ru["prices.inputLabel"], row));
+    await user.clear(input);
+    await user.type(input, "0x10");
+    await user.click(screen.getByRole("button", { name: ru["prices.save"] }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru["prices.invalid"]);
+    expect(sent).toBeUndefined();
+
+    await user.clear(input);
+    await user.type(input, "1,5");
+    await user.click(screen.getByRole("button", { name: ru["prices.save"] }));
+    await screen.findByText(ru["prices.saved"]);
+    expect(sent).toEqual([
+      { provider: "claude", model: "claude-sonnet-5", input: 1.5, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
     ]);
   });
 });

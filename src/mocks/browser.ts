@@ -113,6 +113,36 @@ let users: Schemas["AdminUser"][] = [
   },
   {
     id: crypto.randomUUID(),
+    kind: "human",
+    displayName: "Katherine Example",
+    email: "katherine@example.com",
+    role: "user",
+    status: "active",
+    policy: ["claude:*"],
+    policySource: "local",
+    mustChangePassword: false,
+    signIn: [],
+    invitationExpiresAt: new Date(Date.now() + 5 * 24 * HOUR).toISOString(),
+    lastSeenAt: null,
+    createdAt: ago(2 * 24 * HOUR),
+  },
+  {
+    id: crypto.randomUUID(),
+    kind: "human",
+    displayName: "Alan Example",
+    email: "alan@example.com",
+    role: "user",
+    status: "active",
+    policy: [],
+    policySource: "local",
+    mustChangePassword: false,
+    signIn: [],
+    invitationExpiresAt: ago(3 * 24 * HOUR),
+    lastSeenAt: null,
+    createdAt: ago(20 * 24 * HOUR),
+  },
+  {
+    id: crypto.randomUUID(),
     kind: "service",
     displayName: "nightly-report",
     email: null,
@@ -403,7 +433,10 @@ const handlers = [
       policy: body.policy,
       policySource: "local",
       mustChangePassword: body.kind === "human" && body.signIn === "password",
-      signIn: body.kind === "service" ? [] : [body.signIn ?? "password"],
+      // Only working methods: an invited person has none until they claim the account.
+      signIn: body.kind === "human" && body.signIn !== "oidc" ? ["password"] : [],
+      invitationExpiresAt:
+        body.kind === "human" && body.signIn === "oidc" ? new Date(Date.now() + 7 * 24 * HOUR).toISOString() : null,
       lastSeenAt: null,
       createdAt: new Date().toISOString(),
     };
@@ -450,6 +483,16 @@ const handlers = [
       password: `tmp-${crypto.randomUUID().slice(0, 13)}`,
       expiresAt: new Date(Date.now() + 72 * HOUR).toISOString(),
     });
+  }),
+  http.post("/api/admin/users/{userId}/invitation", ({ params, response }) => {
+    const user = users.find((u) => u.id === params.userId);
+    if (user === undefined) return response.untyped(notFound());
+    if (user.signIn.includes("oidc")) return response(409).json({ code: "already_linked", message: "" });
+    if (user.kind === "service" || user.email == null)
+      return response(409).json({ code: "not_invitable", message: "" });
+    const invitationExpiresAt = new Date(Date.now() + 7 * 24 * HOUR).toISOString();
+    users = users.map((u) => (u.id === user.id ? { ...u, invitationExpiresAt } : u));
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get("/api/admin/users/{userId}/tokens", ({ params, response }) =>
     response(200).json(userTokens.get(params.userId) ?? []),

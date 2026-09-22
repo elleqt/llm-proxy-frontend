@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
+import { cached } from "../../../test/cache";
 import { renderApp } from "../../../test/render";
 import { fixtures, http, server, type Schemas } from "../../../test/server";
 
@@ -30,7 +31,7 @@ function providers(accounts: Schemas["ProviderAccount"][]) {
 }
 
 describe("add-account wizard", () => {
-  it("goes from provider to sign-in link to the pasted address, and lists the new account", async () => {
+  it("goes from provider to sign-in link to the pasted address, lists the new account, and keeps link and address in no cache", async () => {
     const accounts: Schemas["ProviderAccount"][] = [];
     providers(accounts);
     let sent: Schemas["ProviderLoginCompleteRequest"] | undefined;
@@ -43,7 +44,7 @@ describe("add-account wizard", () => {
       }),
     );
     const user = userEvent.setup();
-    renderApp("/admin/providers");
+    const { queryClient } = renderApp("/admin/providers");
 
     await user.click(await screen.findByRole("button", { name: en["providerLogin.open"] }));
     const dialog = screen.getByRole("dialog", { name: en["providerLogin.title"] });
@@ -53,6 +54,11 @@ describe("add-account wizard", () => {
     expect(
       await within(dialog).findByRole("textbox", { name: fill(en["providerLogin.link"], { provider: "chatgpt" }) }),
     ).toHaveTextContent(AUTH_URL);
+    // A sign-in link, not a secret shown once: its own warning.
+    expect(
+      within(dialog).getByRole("group", { name: fill(en["providerLogin.link"], { provider: "chatgpt" }) }),
+    ).toHaveAccessibleDescription(en["providerLogin.linkWarning"]);
+    await waitFor(() => expect(cached(queryClient)).not.toContain(AUTH_URL));
     expect(within(dialog).getByRole("timer")).toHaveTextContent(
       fill(en["providerLogin.expiresIn"], { countdown: "1:30" }),
     );
@@ -66,6 +72,23 @@ describe("add-account wizard", () => {
     );
     expect(sent).toEqual({ sessionId: "session-chatgpt", callbackURL: CALLBACK });
     expect(await screen.findByRole("cell", { name: "team" })).toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain("code=example");
+  });
+
+  it("leaves nothing of an abandoned sign-in behind", async () => {
+    providers([]);
+    const user = userEvent.setup();
+    const { queryClient } = renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: en["providerLogin.open"] }));
+    await user.click(screen.getByRole("button", { name: en["providerLogin.getLink"] }));
+    await screen.findByRole("timer");
+    await user.click(screen.getByRole("button", { name: en["ui.cancel"] }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain(AUTH_URL);
+    await user.click(screen.getByRole("button", { name: en["providerLogin.open"] }));
+    expect(screen.getByRole("button", { name: en["providerLogin.getLink"] })).toBeInTheDocument();
   });
 
   it("counts down and shows the expiry when it happens, with no submit left to fail", async () => {
@@ -91,7 +114,9 @@ describe("add-account wizard", () => {
     expect(timer).toHaveTextContent(fill(en["providerLogin.expiresIn"], { countdown: "1:00" }));
 
     act(() => vi.advanceTimersByTime(LINK_LIFETIME_MS - 30_000));
-    const dialog = screen.getByRole("dialog", { name: en["providerLogin.title"] });
+    // The wizard is over: its title says so, and no step is left.
+    const dialog = screen.getByRole("dialog", { name: en["providerLogin.expiredTitle"] });
+    expect(dialog).not.toHaveTextContent(fill(en["providerLogin.step"], { n: 3, of: 3 }));
     expect(within(dialog).getByRole("alert")).toHaveTextContent(
       en["providerLogin.expired"].split("{time}")[0] as string,
     );

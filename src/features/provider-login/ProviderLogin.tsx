@@ -9,12 +9,14 @@ import {
 } from "../../entities/provider/providers";
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
-import { useErrorMessage, useLang, useT } from "../../shared/i18n";
+import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Button, CopyField, Modal, Select, TextField } from "../../shared/ui";
 import styles from "./ProviderLogin.module.css";
 
 type LoginSession = components["schemas"]["ProviderLoginSession"];
+type StartRequest = components["schemas"]["ProviderLoginStartRequest"];
+type CompleteRequest = components["schemas"]["ProviderLoginCompleteRequest"];
 
 /** The "Add account" button and its three-step wizard. */
 export function AddProviderAccount() {
@@ -52,34 +54,41 @@ function Wizard({ onClose }: { onClose: () => void }) {
   const [session, setSession] = useState<LoginSession | null>(null);
   const [step, setStep] = useState<"link" | "callback">("link");
   const [callbackURL, setCallbackURL] = useState("");
-  const [callbackError, setCallbackError] = useState<string | null>(null);
+  // A key, not text: it is translated at render, so it follows a language switch.
+  const [callbackError, setCallbackError] = useState<MessageKey | null>(null);
   const [refusedAsExpired, setRefusedAsExpired] = useState(false);
   const [added, setAdded] = useState<ProviderAccount | null>(null);
 
   const remaining = useRemaining(session?.expiresAt);
   const expired = session !== null && (remaining === 0 || refusedAsExpired);
 
+  // The sign-in link (start's answer) and the pasted address (complete's
+  // variables, carrying the vendor's code) live only in this wizard's state:
+  // each mutation is reset once its result is taken, and gcTime 0 drops what
+  // is left the moment the wizard closes.
   const start = useMutation({
-    mutationFn: (body: { provider: LoginProvider }) =>
-      unwrap(client.POST("/api/admin/providers/login/start", { body })),
-    onSuccess: (created) => {
-      setSession(created);
-      setStep("link");
-      setCallbackURL("");
-      setRefusedAsExpired(false);
-    },
+    mutationFn: (body: StartRequest) => unwrap(client.POST("/api/admin/providers/login/start", { body })),
+    gcTime: 0,
   });
   const complete = useMutation({
-    mutationFn: (body: { sessionId: string; callbackURL: string }) =>
-      unwrap(client.POST("/api/admin/providers/login/complete", { body })),
-    onSuccess: (account) => {
-      setAdded(account);
-      void queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey });
-    },
-    onError: (error) => {
-      if (error instanceof ApiError && error.code === "login_expired") setRefusedAsExpired(true);
-    },
+    mutationFn: (body: CompleteRequest) => unwrap(client.POST("/api/admin/providers/login/complete", { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey }),
+    gcTime: 0,
   });
+
+  const getLink = () =>
+    start.mutate(
+      { provider },
+      {
+        onSuccess: (created) => {
+          setSession(created);
+          setStep("link");
+          setCallbackURL("");
+          setRefusedAsExpired(false);
+          start.reset();
+        },
+      },
+    );
 
   const restart = () => {
     setSession(null);
@@ -92,11 +101,25 @@ function Wizard({ onClose }: { onClose: () => void }) {
     if (session === null || expired) return;
     const url = callbackURL.trim();
     if (url === "") {
-      setCallbackError(t("providerLogin.callbackRequired"));
+      setCallbackError("providerLogin.callbackRequired");
       return;
     }
     setCallbackError(null);
-    complete.mutate({ sessionId: session.sessionId, callbackURL: url });
+    complete.mutate(
+      { sessionId: session.sessionId, callbackURL: url },
+      {
+        onSuccess: (account) => {
+          setAdded(account);
+          complete.reset();
+        },
+        onError: (error) => {
+          if (error instanceof ApiError && error.code === "login_expired") {
+            setRefusedAsExpired(true);
+            complete.reset();
+          }
+        },
+      },
+    );
   };
 
   if (added !== null) {
@@ -128,16 +151,17 @@ function Wizard({ onClose }: { onClose: () => void }) {
       // The sign-in link is as good as a secret until it expires: no closing by a stray click.
       closeOnBackdrop={false}
       onClose={onClose}
-      title={t("providerLogin.title")}
+      title={t(expired ? "providerLogin.expiredTitle" : "providerLogin.title")}
     >
-      <p className={styles.step}>{fill(t("providerLogin.step"), { n: stepNumber, of: 3 })}</p>
+      {/* An expired sign-in has no step left: the wizard is over until started again. */}
+      {!expired && <p className={styles.step}>{fill(t("providerLogin.step"), { n: stepNumber, of: 3 })}</p>}
 
       {session === null ? (
         <form
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();
-            start.mutate({ provider });
+            getLink();
           }}
         >
           <Select
@@ -173,7 +197,11 @@ function Wizard({ onClose }: { onClose: () => void }) {
           {step === "link" ? (
             <div className={styles.form}>
               <p>{t("providerLogin.openLink")}</p>
-              <CopyField label={fill(t("providerLogin.link"), { provider })} value={session.authURL} />
+              <CopyField
+                label={fill(t("providerLogin.link"), { provider })}
+                value={session.authURL}
+                warning={t("providerLogin.linkWarning")}
+              />
               <div className={styles.actions}>
                 <Button onClick={onClose}>{t("ui.cancel")}</Button>
                 <Button variant="primary" onClick={() => setStep("callback")}>
@@ -192,7 +220,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
                 autoComplete="off"
                 spellCheck={false}
                 onChange={(event) => setCallbackURL(event.target.value)}
-                error={callbackError ?? undefined}
+                error={callbackError === null ? undefined : t(callbackError)}
               />
               {complete.isError && <p role="alert">{errorMessage(complete.error)}</p>}
               <div className={styles.actions}>

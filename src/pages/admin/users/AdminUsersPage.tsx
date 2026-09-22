@@ -3,11 +3,16 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { adminUsersQuery, type AdminUser } from "../../../entities/user/adminUsers";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
+import { fill } from "../../../shared/lib/template";
 import { Badge, EmptyState, Select, Spinner, Table, TextField, type Column } from "../../../shared/ui";
 import styles from "../admin.module.css";
+import { InvitationState } from "../Invitation";
 import { CreateAccount } from "./CreateAccount";
 
 type Filter<T extends string> = T | "all";
+
+/** Rules shown in the list; the rest are counted. */
+const POLICY_SHOWN = 2;
 
 export function AdminUsersPage() {
   const t = useT();
@@ -55,18 +60,47 @@ export function AdminUsersPage() {
     {
       id: "signIn",
       header: t("admin.signIn"),
-      cell: (user) =>
-        user.kind === "service" ? (
-          <span className={styles.dim}>{t("admin.signIn.none")}</span>
-        ) : (
-          user.signIn.map((method) => t(`admin.signIn.${method}`)).join(", ")
-        ),
+      cell: (user) => {
+        const methods = user.signIn.map((method) => t(`admin.signIn.${method}`)).join(", ");
+        const invitation =
+          user.invitationExpiresAt == null ? null : <InvitationState expiresAt={user.invitationExpiresAt} />;
+        if (methods === "" && invitation === null) return <span className={styles.dim}>{t("admin.signIn.none")}</span>;
+        return (
+          <span className={styles.policy}>
+            {methods}
+            {invitation}
+          </span>
+        );
+      },
     },
     {
       id: "role",
       header: t("admin.role"),
       sortValue: (user) => user.role,
       cell: (user) => t(`admin.role.${user.role}`),
+    },
+    {
+      id: "policy",
+      header: t("admin.policy"),
+      cell: (user) => (
+        <span className={styles.policy}>
+          {user.policy.length === 0 ? (
+            <span className={styles.dim}>{t("admin.policyNone")}</span>
+          ) : (
+            <>
+              {user.policy.slice(0, POLICY_SHOWN).map((rule) => (
+                <code key={rule}>{rule}</code>
+              ))}
+              {user.policy.length > POLICY_SHOWN && (
+                <span className={styles.dim}>
+                  {fill(t("admin.policyMore"), { n: user.policy.length - POLICY_SHOWN })}
+                </span>
+              )}
+            </>
+          )}
+          {user.policySource === "idp" && <Badge tone="muted">{t("admin.policyIdp")}</Badge>}
+        </span>
+      ),
     },
     {
       id: "status",

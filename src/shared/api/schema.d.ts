@@ -235,6 +235,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users/{userId}/invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a fresh identity-provider invitation for a human who has not linked an identity yet (the old one lapsed or was consumed without a link). Replaces any previous invitation for that account. */
+        post: operations["renewUserInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users/{userId}/tokens": {
         parameters: {
             query?: never;
@@ -490,6 +507,7 @@ export interface components {
             revokedAt?: string | null;
         };
         IssueTokenRequest: {
+            /** @description Printable text; control characters are refused. */
             label: string;
         };
         IssuedToken: {
@@ -505,7 +523,9 @@ export interface components {
             /** @enum {string} */
             bucket: "hour" | "day";
             totals: {
+                /** @description Served requests. An attempt the gateway retried on another account is not counted twice; failed attempts are not counted. */
                 requests: number;
+                /** @description Every token spent, including tokens of failed or retried attempts. */
                 tokensTotal: number;
             };
             points: {
@@ -515,6 +535,7 @@ export interface components {
                  */
                 at: string;
                 model: string;
+                /** @description Served requests in this bucket, as in `totals.requests`. */
                 requests: number;
                 tokensTotal: number;
             }[];
@@ -534,8 +555,13 @@ export interface components {
             policy: components["schemas"]["Policy"];
             policySource: components["schemas"]["PolicySource"];
             mustChangePassword: boolean;
-            /** @description Sign-in methods the account has. Empty for a service account. */
+            /** @description Sign-in methods that work now: `password` when a usable (unexpired) password is set, `oidc` when an identity-provider identity is linked. Empty for a service account and for a person whose only way in is a pending invitation. */
             signIn: ("password" | "oidc")[];
+            /**
+             * Format: date-time
+             * @description Set while an identity-provider invitation exists and no identity is linked yet; it may lie in the past (lapsed - renew it with POST .../invitation).
+             */
+            invitationExpiresAt?: string | null;
             /** Format: date-time */
             lastSeenAt?: string | null;
             /** Format: date-time */
@@ -956,6 +982,15 @@ export interface operations {
                     "application/json": components["schemas"]["IssuedToken"];
                 };
             };
+            /** @description `invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     revokeMyToken: {
@@ -1083,6 +1118,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `invalid_input` with `field` naming the offending field (kind, email, role, signIn, displayName), or `invalid_rule` with `field` set to the first bad rule. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getUser: {
@@ -1182,6 +1226,35 @@ export interface operations {
             };
         };
     };
+    renewUserInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invited. The first IdP sign-in with the account's address claims it. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `already_linked` — the account already has an identity-provider link; `not_invitable` — a service account, an account without an email address, or identity-provider sign-in is not configured. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listUserTokens: {
         parameters: {
             query?: never;
@@ -1228,6 +1301,15 @@ export interface operations {
                     "application/json": components["schemas"]["IssuedToken"];
                 };
             };
+            /** @description `invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     revokeUserToken: {
@@ -1248,6 +1330,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `not_found` — no such token on that account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -1557,6 +1648,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelPrice"][];
+                };
+            };
+            /** @description `invalid_input` with `field` naming the entry and value, e.g. `[2].input` (a negative price) or `[3]` (a provider and model listed twice). Nothing is replaced. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

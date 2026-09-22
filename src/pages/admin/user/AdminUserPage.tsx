@@ -11,9 +11,9 @@ import {
 } from "../../../entities/user/adminUsers";
 import type { Token } from "../../../entities/token/tokens";
 import { PolicyEditor } from "../../../features/policy-editor/PolicyEditor";
-import { client, unwrap } from "../../../shared/api/client";
+import { ApiError, client, unwrap } from "../../../shared/api/client";
 import type { components } from "../../../shared/api/schema";
-import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
+import { useErrorMessage, useLang, useT, type MessageKey } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
 import {
   Badge,
@@ -29,10 +29,12 @@ import {
   type Column,
 } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { Invitation } from "../Invitation";
 import { TemporaryPassword } from "../TemporaryPassword";
 import styles from "../admin.module.css";
 
 type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
+type TemporaryPasswordValue = components["schemas"]["TemporaryPassword"];
 
 export function AdminUserPage() {
   const t = useT();
@@ -95,7 +97,7 @@ function Details({ user }: { user: AdminUser }) {
   const t = useT();
   const [lang] = useLang();
   const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
-  const hasPassword = user.kind === "human" && user.signIn.includes("password");
+  const human = user.kind === "human";
   return (
     <Card title={t("admin.account")} actions={<BlockToggle user={user} />}>
       <dl className={styles.details}>
@@ -106,7 +108,7 @@ function Details({ user }: { user: AdminUser }) {
         {user.kind === "human" && (
           <div>
             <dt>{t("admin.signIn")}</dt>
-            <dd>{user.signIn.map((method) => t(`admin.signIn.${method}`)).join(", ") || "—"}</dd>
+            <dd>{user.signIn.map((method) => t(`admin.signIn.${method}`)).join(", ") || t("admin.signIn.none")}</dd>
           </div>
         )}
         <div>
@@ -125,9 +127,12 @@ function Details({ user }: { user: AdminUser }) {
         </div>
       </dl>
       {user.mustChangePassword && <p className={styles.dim}>{t("admin.mustChangePassword")}</p>}
+      {/* A person with no identity-provider link yet can be (re)invited to claim the account through it. */}
+      {human && !user.signIn.includes("oidc") && user.email != null && <Invitation user={user} />}
       <div className={styles.inlineForms}>
         <RoleForm user={user} />
-        {hasPassword && <PasswordReset user={user} />}
+        {/* Any person can be given a temporary password; a service account has none. */}
+        {human && <PasswordReset user={user} />}
       </div>
     </Card>
   );
@@ -211,13 +216,16 @@ function PasswordResetDialog({ user, onClose }: { user: AdminUser; onClose: () =
   const t = useT();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
+  const [password, setPassword] = useState<TemporaryPasswordValue | null>(null);
   const reset = useMutation({
     mutationFn: () =>
       unwrap(client.POST("/api/admin/users/{userId}/password-reset", { params: { path: { userId: user.id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminUserQuery(user.id).queryKey }),
+    // With reset() below, the password leaves the mutation cache at once.
+    gcTime: 0,
   });
 
-  if (reset.data !== undefined) {
+  if (password !== null) {
     return (
       <Modal
         key="reset"
@@ -232,7 +240,7 @@ function PasswordResetDialog({ user, onClose }: { user: AdminUser; onClose: () =
           </Button>
         }
       >
-        <TemporaryPassword value={reset.data} />
+        <TemporaryPassword value={password} />
         <p>{t("admin.createdPassword")}</p>
       </Modal>
     );
@@ -244,7 +252,15 @@ function PasswordResetDialog({ user, onClose }: { user: AdminUser; onClose: () =
       confirmLabel={t("admin.resetConfirm")}
       busy={reset.isPending}
       error={reset.isError ? errorMessage(reset.error) : null}
-      onConfirm={() => reset.mutate()}
+      onConfirm={() =>
+        reset.mutate(undefined, {
+          // The password moves into this dialog's state and nowhere else.
+          onSuccess: (result) => {
+            setPassword(result);
+            reset.reset();
+          },
+        })
+      }
       onClose={onClose}
     />
   );
@@ -392,14 +408,20 @@ function IssueOnBehalfDialog({ user, onClose }: { user: AdminUser; onClose: () =
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState("");
-  const [labelError, setLabelError] = useState<string | null>(null);
+  // A key, not text: it is translated at render, so it follows a language switch.
+  const [labelError, setLabelError] = useState<MessageKey | null>(null);
+  const [issued, setIssued] = useState<{ label: string; secret: string } | null>(null);
   const issue = useMutation({
-    mutationFn: (body: { label: string }) =>
+    mutationFn: (body: components["schemas"]["IssueTokenRequest"]) =>
       unwrap(client.POST("/api/admin/users/{userId}/tokens", { params: { path: { userId: user.id } }, body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminUserTokensQuery(user.id).queryKey }),
+    // With reset() below, the secret leaves the mutation cache at once.
+    gcTime: 0,
   });
 
-  if (issue.data !== undefined) {
+  const labelRefused = issue.error instanceof ApiError && issue.error.field === "label";
+
+  if (issued !== null) {
     return (
       <Modal
         key="issued"
@@ -414,7 +436,7 @@ function IssueOnBehalfDialog({ user, onClose }: { user: AdminUser; onClose: () =
           </Button>
         }
       >
-        <CopyField label={fill(t("issue.secretLabel"), { label: issue.data.token.label })} value={issue.data.secret} />
+        <CopyField label={fill(t("issue.secretLabel"), { label: issued.label })} value={issued.secret} />
       </Modal>
     );
   }
@@ -423,11 +445,20 @@ function IssueOnBehalfDialog({ user, onClose }: { user: AdminUser; onClose: () =
     event.preventDefault();
     const trimmed = label.trim();
     if (trimmed === "") {
-      setLabelError(t("issue.labelRequired"));
+      setLabelError("issue.labelRequired");
       return;
     }
     setLabelError(null);
-    issue.mutate({ label: trimmed });
+    issue.mutate(
+      { label: trimmed },
+      {
+        // The secret moves into this dialog's state and nowhere else.
+        onSuccess: ({ token, secret }) => {
+          setIssued({ label: token.label, secret });
+          issue.reset();
+        },
+      },
+    );
   };
   return (
     <Modal open onClose={onClose} title={fill(t("admin.issueTitle"), { name: user.displayName })}>
@@ -436,13 +467,13 @@ function IssueOnBehalfDialog({ user, onClose }: { user: AdminUser; onClose: () =
           label={t("issue.label")}
           hint={t("admin.issueLabelHint")}
           value={label}
-          maxLength={80}
+          maxLength={64}
           autoComplete="off"
           autoFocus
           onChange={(event) => setLabel(event.target.value)}
-          error={labelError ?? undefined}
+          error={labelError === null ? (labelRefused ? errorMessage(issue.error) : undefined) : t(labelError)}
         />
-        {issue.isError && <p role="alert">{errorMessage(issue.error)}</p>}
+        {issue.isError && !labelRefused && <p role="alert">{errorMessage(issue.error)}</p>}
         <div className={styles.dialogActions}>
           <Button onClick={onClose}>{t("ui.cancel")}</Button>
           <Button type="submit" variant="primary" busy={issue.isPending}>

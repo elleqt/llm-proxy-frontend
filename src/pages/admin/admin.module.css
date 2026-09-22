@@ -63,6 +63,11 @@
   margin-bottom: 1rem;
 }
 
+/* A native select and a text input differ in height; one height lines up labels and boxes. */
+.filters :is(input, select) {
+  height: 2.6rem;
+}
+
 @media (max-width: 48rem) {
   .filters {
     grid-template-columns: minmax(0, 1fr);
@@ -271,5 +276,25 @@
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.policy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+}
+
+.invitation {
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.invitation [role="status"]:not(:empty) {
+  flex-basis: 100%;
+}
+
+.policy code {
   white-space: nowrap;
 }

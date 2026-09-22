@@ -8,7 +8,7 @@ import {
   type SettingsUpdateRequest,
 } from "../../../entities/settings/settings";
 import { ApiError, client, unwrap } from "../../../shared/api/client";
-import { useErrorMessage, useT } from "../../../shared/i18n";
+import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
 import { Button, Card, Spinner, Table, Tabs, TextField, type Column } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -271,22 +271,25 @@ interface PriceRow {
 const PRICE_FIELDS = ["input", "output", "cacheRead", "cacheWrite"] as const;
 let nextPriceKey = 0;
 
-function toPriceRow(price: ModelPrice): PriceRow {
+function toPriceRow(price: ModelPrice, format: Intl.NumberFormat): PriceRow {
   return {
     key: nextPriceKey++,
     provider: price.provider,
     model: price.model,
-    input: String(price.input),
-    output: String(price.output),
-    cacheRead: String(price.cacheRead),
-    cacheWrite: String(price.cacheWrite),
+    input: format.format(price.input),
+    output: format.format(price.output),
+    cacheRead: format.format(price.cacheRead),
+    cacheWrite: format.format(price.cacheWrite),
   };
 }
 
-/** A price as typed: a number of 0 or more, else `undefined`. */
+/**
+ * A price as typed: a plain decimal of 0 or more, with a point or a comma
+ * (as typed in Russian), else `undefined`. No signs, exponents or hex.
+ */
 function price(text: string): number | undefined {
-  const value = Number(text.trim());
-  return text.trim() !== "" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  const trimmed = text.trim();
+  return /^\d+([.,]\d+)?$/.test(trimmed) ? Number(trimmed.replace(",", ".")) : undefined;
 }
 
 function Prices() {
@@ -309,15 +312,18 @@ function Prices() {
 
 function PriceEditor({ prices }: { prices: ModelPrice[] }) {
   const t = useT();
+  const [lang] = useLang();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
-  const [rows, setRows] = useState(() => prices.map(toPriceRow));
+  // Prices as the admin reads and types them: the locale's decimal mark, no grouping.
+  const format = new Intl.NumberFormat(lang, { useGrouping: false, maximumFractionDigits: 20 });
+  const [rows, setRows] = useState(() => prices.map((price) => toPriceRow(price, format)));
   const [attempted, setAttempted] = useState(false);
   const save = useMutation({
     mutationFn: (body: ModelPrice[]) => unwrap(client.PUT("/api/admin/prices", { body })),
     onSuccess: (saved) => {
       queryClient.setQueryData(pricesQuery.queryKey, saved);
-      setRows(saved.map(toPriceRow));
+      setRows(saved.map((price) => toPriceRow(price, format)));
       setAttempted(false);
     },
   });
@@ -392,7 +398,13 @@ function PriceEditor({ prices }: { prices: ModelPrice[] }) {
         <Table label={t("prices.title")} columns={columns} rows={rows} rowKey={(row) => String(row.key)} />
       )}
       {hasInvalid && <p role="alert">{t("prices.invalid")}</p>}
-      {save.isError && <p role="alert">{errorMessage(save.error)}</p>}
+      {save.isError && (
+        <p role="alert">
+          {save.error instanceof ApiError && save.error.field !== undefined
+            ? fill(t("settings.errorField"), { error: errorMessage(save.error), field: save.error.field })
+            : errorMessage(save.error)}
+        </p>
+      )}
       <div className={styles.actions}>
         <Button
           onClick={() =>

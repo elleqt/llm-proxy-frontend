@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
+import { cached } from "../../../test/cache";
 import { renderApp } from "../../../test/render";
 import { fixtures, http, server, type Schemas } from "../../../test/server";
 
@@ -13,18 +14,24 @@ const SECRET = "sk-svc-0123456789abcdef-example";
 interface Card {
   user?: Schemas["AdminUser"];
   tokens?: Schemas["Token"][];
+  activity?: Schemas["Activity"];
   /** Coverage the preview answers with, per requested rule set. */
   preview?: (rules: string[]) => Schemas["PolicyPreview"];
 }
 
 /** An administrator on the card of `user`; the requests the card makes are recorded. */
-function card({ user = fixtures.adminUser(), tokens = [], preview = () => ({ errors: [], covered: [] }) }: Card = {}) {
+function card({
+  user = fixtures.adminUser(),
+  tokens = [],
+  activity = { requests: [], audit: [] },
+  preview = () => ({ errors: [], covered: [] }),
+}: Card = {}) {
   const previews: string[][] = [];
   server.use(
     http.get("/api/me", ({ response }) => response(200).json(fixtures.me({ role: "admin" }))),
     http.get("/api/admin/users/{userId}", ({ response }) => response(200).json(user)),
     http.get("/api/admin/users/{userId}/tokens", ({ response }) => response(200).json(tokens)),
-    http.get("/api/admin/users/{userId}/activity", ({ response }) => response(200).json({ requests: [], audit: [] })),
+    http.get("/api/admin/users/{userId}/activity", ({ response }) => response(200).json(activity)),
     http.get("/api/admin/catalog", ({ response }) => response(200).json(fixtures.catalog())),
     http.post("/api/admin/policy/preview", async ({ request, response }) => {
       const { rules } = await request.json();
@@ -80,8 +87,113 @@ describe("blocking", () => {
   });
 });
 
+describe("role", () => {
+  it("changes the role once a different one is picked, and shows a self-lockout refusal in place", async () => {
+    card({ user: fixtures.adminUser({ role: "admin" }) });
+    const sent: Schemas["UpdateUserRequest"][] = [];
+    server.use(
+      http.patch("/api/admin/users/{userId}", async ({ request, response }) => {
+        sent.push(await request.json());
+        return response(409).json({ code: "self_lockout", message: "" });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+
+    const change = await screen.findByRole("button", { name: en["admin.changeRole"] });
+    expect(change).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText(en["admin.role"]), "user");
+    await user.click(change);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.self_lockout"]);
+    expect(sent).toEqual([{ role: "user" }]);
+  });
+});
+
+describe("keys and activity", () => {
+  it("states a key that was never used, and lists recent requests and audit events", async () => {
+    card({
+      tokens: [fixtures.token({ label: "ci", lastUsedAt: null })],
+      activity: {
+        requests: [
+          {
+            at: "2026-09-23T08:00:00Z",
+            tokenId: null,
+            provider: "claude",
+            model: "claude-sonnet-5",
+            stream: true,
+            statusCode: 429,
+            tokensTotal: 1234,
+            latencyMs: 850,
+          },
+        ],
+        audit: [{ at: "2026-09-22T08:00:00Z", action: "token.revoke", target: "old-laptop", actorId: null }],
+      },
+    });
+    renderApp(`/admin/users/${ID}`);
+
+    const key = (await screen.findByRole("cell", { name: "ci" })).closest("tr") as HTMLElement;
+    expect(key).toHaveTextContent(en["tokens.neverUsed"]);
+    const request = (await screen.findByRole("cell", { name: "claude:claude-sonnet-5" })).closest("tr") as HTMLElement;
+    expect(request).toHaveTextContent("429");
+    expect(request).toHaveTextContent("1,234");
+    expect(request).toHaveTextContent(fill(en["admin.ms"], { ms: 850 }));
+    const audit = screen.getByRole("cell", { name: "token.revoke" }).closest("tr") as HTMLElement;
+    expect(audit).toHaveTextContent("old-laptop");
+  });
+});
+
+describe("invitation", () => {
+  const invited = fixtures.adminUser({ signIn: [], invitationExpiresAt: "2026-09-20T09:00:00Z" });
+
+  it("renews a lapsed invitation and shows the new expiry", async () => {
+    let user = invited;
+    let renewals = 0;
+    card({ user });
+    server.use(
+      http.get("/api/admin/users/{userId}", ({ response }) => response(200).json(user)),
+      http.get("/api/admin/users", ({ response }) => response(200).json([user])),
+      http.post("/api/admin/users/{userId}/invitation", () => {
+        renewals++;
+        user = { ...user, invitationExpiresAt: "2099-01-01T09:00:00Z" };
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const click = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+
+    expect(await screen.findByText(en["admin.invitationLapsed"])).toBeInTheDocument();
+    await click.click(screen.getByRole("button", { name: en["admin.renewInvitation"] }));
+
+    expect(await screen.findByText(/2099/)).toHaveTextContent(fill(en["admin.invitationPending"], { time: "" }).trim());
+    expect(screen.queryByText(en["admin.invitationLapsed"])).not.toBeInTheDocument();
+    expect(renewals).toBe(1);
+  });
+
+  it("shows already_linked in place", async () => {
+    card({ user: invited });
+    server.use(
+      http.post("/api/admin/users/{userId}/invitation", ({ response }) =>
+        response(409).json({ code: "already_linked", message: "" }),
+      ),
+    );
+    const click = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+
+    await click.click(await screen.findByRole("button", { name: en["admin.renewInvitation"] }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.already_linked"]);
+  });
+
+  it("is not offered once the identity provider is linked", async () => {
+    card({ user: fixtures.adminUser({ signIn: ["oidc"] }) });
+    renderApp(`/admin/users/${ID}`);
+    await screen.findByRole("heading", { level: 1, name: "Grace Example" });
+    expect(screen.queryByRole("button", { name: en["admin.renewInvitation"] })).not.toBeInTheDocument();
+  });
+});
+
 describe("password reset", () => {
-  it("shows the temporary password once, after a confirmation", async () => {
+  it("shows the temporary password once, after a confirmation, and keeps it in no cache", async () => {
     card();
     let resets = 0;
     server.use(
@@ -91,7 +203,7 @@ describe("password reset", () => {
       }),
     );
     const user = userEvent.setup();
-    renderApp(`/admin/users/${ID}`);
+    const { queryClient } = renderApp(`/admin/users/${ID}`);
 
     await user.click(await screen.findByRole("button", { name: en["admin.resetPassword"] }));
     expect(resets).toBe(0);
@@ -104,8 +216,10 @@ describe("password reset", () => {
     expect(within(result).getByRole("textbox", { name: en["admin.tempPassword"] })).toHaveTextContent(
       "tmp-reset-example",
     );
+    await waitFor(() => expect(cached(queryClient)).not.toContain("tmp-reset-example"));
     await user.click(within(result).getByRole("button", { name: en["issue.done"] }));
     expect(screen.queryByText("tmp-reset-example")).not.toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain("tmp-reset-example");
     expect(resets).toBe(1);
   });
 });
@@ -113,7 +227,7 @@ describe("password reset", () => {
 describe("service account", () => {
   const service = fixtures.adminUser({ kind: "service", displayName: "nightly-report", email: null, signIn: [] });
 
-  it("has no password reset, and gets a key issued on its behalf shown once", async () => {
+  it("has no password reset, and gets a key issued on its behalf shown once and kept in no cache", async () => {
     const tokens: Schemas["Token"][] = [];
     card({ user: service, tokens });
     let sentLabel: string | undefined;
@@ -127,7 +241,7 @@ describe("service account", () => {
       }),
     );
     const user = userEvent.setup();
-    renderApp(`/admin/users/${ID}`);
+    const { queryClient } = renderApp(`/admin/users/${ID}`);
 
     await user.click(await screen.findByRole("button", { name: en["admin.issueToken"] }));
     expect(screen.queryByRole("button", { name: en["admin.resetPassword"] })).not.toBeInTheDocument();
@@ -139,10 +253,12 @@ describe("service account", () => {
     });
     expect(within(result).getByRole("textbox")).toHaveTextContent(SECRET);
     expect(sentLabel).toBe("exporter");
+    await waitFor(() => expect(cached(queryClient)).not.toContain(SECRET));
     await user.click(within(result).getByRole("button", { name: en["issue.done"] }));
 
     expect(await screen.findByRole("cell", { name: "exporter" })).toBeInTheDocument();
     expect(screen.queryByText(SECRET)).not.toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain(SECRET);
   });
 
   it("revokes a key only once its label is typed", async () => {

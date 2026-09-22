@@ -181,6 +181,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IssuedToken" }
+        "422":
+          description: "`invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /api/me/tokens/{tokenId}:
     delete:
@@ -255,6 +260,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            `invalid_input` with `field` naming the offending field (kind, email, role,
+            signIn, displayName), or `invalid_rule` with `field` set to the first bad rule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /api/admin/users/{userId}:
     get:
@@ -314,6 +326,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/admin/users/{userId}/invitation:
+    post:
+      tags: [admin-users]
+      operationId: renewUserInvitation
+      summary: >
+        Issue a fresh identity-provider invitation for a human who has not linked an
+        identity yet (the old one lapsed or was consumed without a link). Replaces any
+        previous invitation for that account.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: Invited. The first IdP sign-in with the account's address claims it. }
+        "409":
+          description: >
+            `already_linked` — the account already has an identity-provider link;
+            `not_invitable` — a service account, an account without an email address, or
+            identity-provider sign-in is not configured.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/admin/users/{userId}/tokens:
     get:
       tags: [admin-users]
@@ -343,6 +375,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IssuedToken" }
+        "422":
+          description: "`invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /api/admin/users/{userId}/tokens/{tokenId}:
     delete:
@@ -353,6 +390,11 @@ paths:
         - $ref: "#/components/parameters/TokenId"
       responses:
         "204": { description: Revoked. }
+        "404":
+          description: "`not_found` — no such token on that account."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /api/admin/users/{userId}/activity:
     get:
@@ -555,6 +597,13 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ModelPrice" }
+        "422":
+          description: >
+            `invalid_input` with `field` naming the entry and value, e.g. `[2].input` (a
+            negative price) or `[3]` (a provider and model listed twice). Nothing is replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -662,7 +711,7 @@ components:
       type: object
       required: [label]
       properties:
-        label: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 64, description: "Printable text; control characters are refused." }
 
     IssuedToken:
       type: object
@@ -682,8 +731,8 @@ components:
           type: object
           required: [requests, tokensTotal]
           properties:
-            requests: { type: integer }
-            tokensTotal: { type: integer }
+            requests: { type: integer, description: "Served requests. An attempt the gateway retried on another account is not counted twice; failed attempts are not counted." }
+            tokensTotal: { type: integer, description: "Every token spent, including tokens of failed or retried attempts." }
         points:
           type: array
           items:
@@ -692,7 +741,7 @@ components:
             properties:
               at: { type: string, format: date-time, description: Start of the bucket. }
               model: { type: string }
-              requests: { type: integer }
+              requests: { type: integer, description: "Served requests in this bucket, as in `totals.requests`." }
               tokensTotal: { type: integer }
 
     ConnectInfo:
@@ -718,8 +767,17 @@ components:
         mustChangePassword: { type: boolean }
         signIn:
           type: array
-          description: Sign-in methods the account has. Empty for a service account.
+          description: >
+            Sign-in methods that work now: `password` when a usable (unexpired) password is
+            set, `oidc` when an identity-provider identity is linked. Empty for a service
+            account and for a person whose only way in is a pending invitation.
           items: { type: string, enum: [password, oidc] }
+        invitationExpiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: >
+            Set while an identity-provider invitation exists and no identity is linked yet;
+            it may lie in the past (lapsed - renew it with POST .../invitation).
         lastSeenAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
 

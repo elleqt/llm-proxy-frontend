@@ -38,14 +38,13 @@ function CreateDialog({ kind, onClose }: { kind: Kind; onClose: () => void }) {
   const [role, setRole] = useState<"user" | "admin">("user");
   const [signIn, setSignIn] = useState<"password" | "oidc">("password");
   const [missing, setMissing] = useState<ReadonlySet<"displayName" | "email">>(new Set());
-  const [created, setCreated] = useState<{ result: CreatedUser; signIn: typeof signIn } | null>(null);
+  const [created, setCreated] = useState<CreatedUser | null>(null);
 
   const create = useMutation({
     mutationFn: (body: CreateUserRequest) => unwrap(client.POST("/api/admin/users", { body })),
-    onSuccess: (result) => {
-      setCreated({ result, signIn });
-      void queryClient.invalidateQueries({ queryKey: adminUsersQuery.queryKey, exact: true });
-    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminUsersQuery.queryKey, exact: true }),
+    // With reset() below, a temporary password leaves the mutation cache at once.
+    gcTime: 0,
   });
 
   const submit = (event: FormEvent) => {
@@ -62,11 +61,18 @@ function CreateDialog({ kind, onClose }: { kind: Kind; onClose: () => void }) {
       kind === "human"
         ? { kind, displayName: name, email: address, role, signIn, policy: [] }
         : { kind, displayName: name, policy: [] },
+      {
+        // The temporary password moves into this dialog's state and nowhere else.
+        onSuccess: (result) => {
+          setCreated(result);
+          create.reset();
+        },
+      },
     );
   };
 
   if (created !== null) {
-    const { user, temporaryPassword } = created.result;
+    const { user, temporaryPassword } = created;
     return (
       <Modal
         key="created"
