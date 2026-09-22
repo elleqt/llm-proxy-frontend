@@ -1,0 +1,22 @@
+:root, html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9; --panel: #ffffff; --line: #dfe3e8; --fg: #1b1f24;
+  --dim: #5c636b; --accent: #2f5fd0; --code: #f0f2f5;
+}
+html[data-theme="pink"] {
+  color-scheme: light;
+  --bg: #fff4f8; --panel: #ffffff; --line: #f7cddf; --fg: #3a1f2b;
+  --dim: #8b5f73; --accent: #d6336c; --code: #fdeaf2;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101214; --panel: #171a1d; --line: #262b30; --fg: #d7dbdf;
+  --dim: #8b949e; --accent: #7aa2f7; --code: #0c0e10;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    color-scheme: dark;
+    --bg: #101214; --panel: #171a1d; --line: #262b30; --fg: #d7dbdf;
+    --dim: #8b949e; --accent: #7aa2f7; --code: #0c0e10;
+  }
+}

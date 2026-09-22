@@ -1,0 +1,31 @@
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.button {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  padding: 0.1rem 0.5rem;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.button:hover {
+  color: var(--fg);
+}
+
+.button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
