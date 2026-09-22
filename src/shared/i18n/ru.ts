@@ -46,4 +46,12 @@ export const ru: Messages = {
   "error.login_failed": "Провайдер отклонил вход.",
   "error.invalid_settings": "Настройки некорректны.",
   "error.forbidden_setting": "Эту настройку задаёт шлюз, здесь её изменить нельзя.",
+
+  "ui.copy": "Копировать",
+  "ui.copied": "Скопировано",
+  "ui.copyFailed": "Не удалось скопировать. Выделите значение и скопируйте вручную.",
+  "ui.shownOnce": "Сохраните сейчас: больше это значение не будет показано.",
+  "ui.close": "Закрыть",
+  "ui.dismiss": "Скрыть",
+  "ui.notifications": "Уведомления",
 };

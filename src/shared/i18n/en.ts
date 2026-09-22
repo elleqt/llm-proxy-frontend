@@ -44,6 +44,14 @@ export const en = {
   "error.login_failed": "The provider rejected the sign-in.",
   "error.invalid_settings": "The settings are not valid.",
   "error.forbidden_setting": "This setting is managed by the gateway and cannot be changed here.",
+
+  "ui.copy": "Copy",
+  "ui.copied": "Copied",
+  "ui.copyFailed": "Could not copy. Select the value and copy it by hand.",
+  "ui.shownOnce": "Save it now: it will not be shown again.",
+  "ui.close": "Close",
+  "ui.dismiss": "Dismiss",
+  "ui.notifications": "Notifications",
 };
 
 export type MessageKey = keyof typeof en;

@@ -1,0 +1,9 @@
+.chart {
+  width: 100%;
+  color: var(--fg);
+}
+
+.chart :global(.u-legend) {
+  font-size: 0.85rem;
+  color: var(--fg);
+}
