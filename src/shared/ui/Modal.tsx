@@ -22,6 +22,12 @@ export interface ModalProps {
    * gone, e.g. the Revoke button of the row that was just revoked.
    */
   returnFocus?: HTMLElement | RefObject<HTMLElement | null> | null;
+  /**
+   * Whether a click on the dimmed page closes the dialog (default). Turn off
+   * where a stray click would lose something for good, e.g. a secret shown
+   * once. Escape and the close button still close.
+   */
+  closeOnBackdrop?: boolean;
 }
 
 /** Body children with this attribute stay live while a modal is open (the toast region). */
@@ -59,7 +65,15 @@ export function Modal({ open, ...dialog }: ModalProps) {
   return open ? <ModalDialog {...dialog} /> : null;
 }
 
-function ModalDialog({ onClose, title, children, footer, initialFocus, returnFocus }: Omit<ModalProps, "open">) {
+function ModalDialog({
+  onClose,
+  title,
+  children,
+  footer,
+  initialFocus,
+  returnFocus,
+  closeOnBackdrop = true,
+}: Omit<ModalProps, "open">) {
   const t = useT();
   const titleId = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -169,7 +183,7 @@ function ModalDialog({ onClose, title, children, footer, initialFocus, returnFoc
       ref={backdropRef}
       className={styles.backdrop}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (closeOnBackdrop && event.target === event.currentTarget) onClose();
       }}
     >
       <div

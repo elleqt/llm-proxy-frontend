@@ -8,7 +8,13 @@ import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { TextField } from "./TextField";
 
-function Harness({ children = <TextField label="Reason" /> }: { children?: ReactNode }) {
+function Harness({
+  children = <TextField label="Reason" />,
+  closeOnBackdrop,
+}: {
+  children?: ReactNode;
+  closeOnBackdrop?: boolean | undefined;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <I18nProvider>
@@ -20,6 +26,7 @@ function Harness({ children = <TextField label="Reason" /> }: { children?: React
         open={open}
         onClose={() => setOpen(false)}
         title="Revoke key “laptop”?"
+        {...(closeOnBackdrop === undefined ? {} : { closeOnBackdrop })}
         footer={
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
@@ -34,12 +41,32 @@ function Harness({ children = <TextField label="Reason" /> }: { children?: React
   );
 }
 
-async function openModal(children?: ReactNode) {
+async function openModal(children?: ReactNode, closeOnBackdrop?: boolean) {
   const user = userEvent.setup();
-  render(<Harness>{children}</Harness>);
+  render(<Harness closeOnBackdrop={closeOnBackdrop}>{children}</Harness>);
   await user.click(screen.getByRole("button", { name: "Revoke" }));
   return user;
 }
+
+describe("Modal backdrop", () => {
+  it("closes the dialog on a click by default", async () => {
+    await openModal();
+
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("is ignored with closeOnBackdrop={false}, while Escape still closes", async () => {
+    const user = await openModal(undefined, false);
+
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
 
 /** Content whose only control is replaced by its result, as a busy action is. */
 function Replacing() {
