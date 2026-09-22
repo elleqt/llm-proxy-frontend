@@ -1,0 +1,25 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.step {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.countdown {
+  margin: 0 0 0.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

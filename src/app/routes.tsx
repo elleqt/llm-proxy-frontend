@@ -1,4 +1,5 @@
 import { Navigate, type RouteObject } from "react-router";
+import { AdminLayout } from "../pages/admin/AdminLayout";
 import { AdminProvidersPage } from "../pages/admin/providers/AdminProvidersPage";
 import { AdminSettingsPage } from "../pages/admin/settings/AdminSettingsPage";
 import { AdminUserPage } from "../pages/admin/user/AdminUserPage";
@@ -26,12 +27,17 @@ export const routes: RouteObject[] = [
             path: "admin",
             element: <AdminGuard />,
             children: [
-              { index: true, element: <Navigate to="users" replace /> },
-              { path: "users", element: <AdminUsersPage /> },
-              { path: "users/:userId", element: <AdminUserPage /> },
-              { path: "providers", element: <AdminProvidersPage /> },
-              { path: "settings", element: <AdminSettingsPage /> },
-              { path: "*", element: <NotFoundPage /> },
+              {
+                element: <AdminLayout />,
+                children: [
+                  { index: true, element: <Navigate to="users" replace /> },
+                  { path: "users", element: <AdminUsersPage /> },
+                  { path: "users/:userId", element: <AdminUserPage /> },
+                  { path: "providers", element: <AdminProvidersPage /> },
+                  { path: "settings", element: <AdminSettingsPage /> },
+                  { path: "*", element: <NotFoundPage /> },
+                ],
+              },
             ],
           },
           { path: "*", element: <NotFoundPage /> },

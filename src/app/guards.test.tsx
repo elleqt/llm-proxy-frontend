@@ -11,6 +11,7 @@ beforeEach(() => {
   server.use(
     http.get("/api/auth/config", ({ response }) => response(200).json({ localLogin: true, oidc: { enabled: false } })),
     http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+    http.get("/api/admin/users", ({ response }) => response(200).json([])),
   );
 });
 

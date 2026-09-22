@@ -1131,7 +1131,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminUser"];
                 };
             };
-            /** @description `policy_managed_by_idp` — the policy is recomputed at every IdP login and cannot be edited here. */
+            /** @description `policy_managed_by_idp` — the policy is recomputed at every IdP login and cannot be edited here while the group mapping is configured. `self_lockout` — an administrator tried to block themselves or remove their own admin role. */
             409: {
                 headers: {
                     [name: string]: unknown;
