@@ -1,10 +1,18 @@
 import { MutationObserver } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { client, unwrap, type ErrorBody } from "../shared/api/client";
 import { en } from "../shared/i18n/en";
 import { renderApp } from "../test/render";
 import { errorResponse, fixtures, http, server, type Schemas } from "../test/server";
+
+// What the screens the guards land on load for themselves.
+beforeEach(() => {
+  server.use(
+    http.get("/api/auth/config", ({ response }) => response(200).json({ localLogin: true, oidc: { enabled: false } })),
+    http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+  );
+});
 
 function signedIn(me: Schemas["Me"]) {
   server.use(http.get("/api/me", ({ response }) => response(200).json(me)));

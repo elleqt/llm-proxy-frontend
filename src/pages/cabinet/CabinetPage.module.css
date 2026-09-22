@@ -1,0 +1,61 @@
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.never {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.periods {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.period {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  color: var(--dim);
+}
+
+.period[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2.5rem;
+  margin: 0 0 1rem;
+}
+
+.totals dt {
+  color: var(--dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.totals dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

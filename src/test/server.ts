@@ -32,4 +32,22 @@ export const fixtures = {
     policySource: "local",
     ...overrides,
   }),
+  token: (overrides: Partial<Schemas["Token"]> = {}): Schemas["Token"] => ({
+    id: "00000000-0000-4000-8000-0000000000a1",
+    label: "laptop",
+    prefix: "sk-a1b2",
+    createdAt: "2026-09-01T09:00:00Z",
+    lastUsedAt: "2026-09-20T15:30:00Z",
+    revokedAt: null,
+    ...overrides,
+  }),
+  /** Usage with no requests in the period. */
+  usage: (overrides: Partial<Schemas["Usage"]> = {}): Schemas["Usage"] => ({
+    from: "2026-09-22T10:00:00Z",
+    to: "2026-09-23T10:00:00Z",
+    bucket: "hour",
+    totals: { requests: 0, tokensTotal: 0 },
+    points: [],
+    ...overrides,
+  }),
 };
