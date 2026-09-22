@@ -58,6 +58,7 @@ export const ru: Messages = {
   "ui.dismiss": "Скрыть",
   "ui.notifications": "Уведомления",
   "ui.chartFailed": "Не удалось загрузить график. Обновите страницу, чтобы попробовать снова.",
+  "ui.chartTime": "Время",
   "ui.cancel": "Отмена",
 
   "app.name": "llm-proxy",

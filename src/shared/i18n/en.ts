@@ -58,6 +58,7 @@ export const en = {
   "ui.dismiss": "Dismiss",
   "ui.notifications": "Notifications",
   "ui.chartFailed": "The chart could not be loaded. Reload the page to try again.",
+  "ui.chartTime": "Time",
   "ui.cancel": "Cancel",
 
   "app.name": "llm-proxy",

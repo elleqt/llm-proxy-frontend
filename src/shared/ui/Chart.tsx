@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { useT } from "../i18n";
+import { useLang, useT } from "../i18n";
 import styles from "./Chart.module.css";
 
 export interface ChartSeries {
@@ -52,29 +52,78 @@ function parsePalette(key: string): Palette {
 const FONT = "12px system-ui, sans-serif";
 // Seven tokens give three usable line colours; dashes tell further series apart.
 const DASHES: number[][] = [[], [6, 4], [2, 3]];
+const DAY = 86_400;
 
-function options(palette: Palette, labels: readonly string[], width: number, height: number): uPlot.Options {
+interface Locale {
+  lang: string;
+  /** Legend label of the x (time) series. */
+  time: string;
+}
+
+/**
+ * Width of the y axis: its longest label plus tick and gap, so labels never
+ * run into the edge of the card however long the localised numbers get.
+ * The font is set unscaled, so the measure is in CSS pixels, as sizes are.
+ */
+const axisSize: uPlot.Axis.Size = (self, values, axisIdx) => {
+  const axis = self.axes[axisIdx];
+  const longest = (values ?? []).reduce((a, b) => (b.length > a.length ? b : a), "");
+  self.ctx.font = FONT;
+  const text = longest === "" ? 0 : self.ctx.measureText(longest).width;
+  return Math.ceil(text + (axis?.ticks?.size ?? 10) + (axis?.gap ?? 5) + 4);
+};
+
+function options(
+  palette: Palette,
+  labels: readonly string[],
+  locale: Locale,
+  width: number,
+  height: number,
+): uPlot.Options {
   const lineColors = [palette["--accent"], palette["--fg"], palette["--dim"]];
-  const axis: uPlot.Axis = {
+  // Formatting only: the numbers themselves come from the backend as they are.
+  const number = new Intl.NumberFormat(locale.lang);
+  const compact = new Intl.NumberFormat(locale.lang, { notation: "compact" });
+  const moment = new Intl.DateTimeFormat(locale.lang, { dateStyle: "medium", timeStyle: "short" });
+  const clock = new Intl.DateTimeFormat(locale.lang, { hour: "2-digit", minute: "2-digit" });
+  const day = new Intl.DateTimeFormat(locale.lang, { day: "numeric", month: "short" });
+  const style = {
     stroke: palette["--dim"],
     font: FONT,
     grid: { stroke: palette["--line"], width: 1 },
     ticks: { stroke: palette["--line"], width: 1 },
-  };
+  } satisfies uPlot.Axis;
   return {
     width,
     height,
+    // Room between the outermost labels and the card's edge.
+    padding: [12, 12, 0, 4],
     series: [
-      {},
+      {
+        label: locale.time,
+        value: (_self, seconds) => (seconds == null ? "—" : moment.format(seconds * 1000)),
+      },
       ...labels.map((label, i) => ({
         label,
+        value: (_self: uPlot, v: number | null) => (v == null ? "—" : number.format(v)),
         stroke: lineColors[i % lineColors.length] ?? palette["--accent"],
         dash: DASHES[Math.floor(i / lineColors.length) % DASHES.length] ?? [],
         width: 2,
         points: { show: false },
       })),
     ],
-    axes: [axis, axis],
+    axes: [
+      {
+        ...style,
+        values: (_self, splits, _axisIdx, _space, step) =>
+          splits.map((s) => (step < DAY ? clock : day).format(s * 1000)),
+      },
+      {
+        ...style,
+        size: axisSize,
+        values: (_self, splits) => splits.map((v) => compact.format(v)),
+      },
+    ],
     cursor: { points: { show: false } },
   };
 }
@@ -89,6 +138,8 @@ function options(palette: Palette, labels: readonly string[], width: number, hei
  */
 export function Chart({ label, data, series, height = 240 }: ChartProps) {
   const t = useT();
+  const [lang] = useLang();
+  const time = t("ui.chartTime");
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const dataRef = useRef(data);
@@ -106,7 +157,7 @@ export function Chart({ label, data, series, height = 240 }: ChartProps) {
         if (cancelled) return;
         let width = container.clientWidth;
         const plot = new UPlot(
-          options(parsePalette(palette), JSON.parse(labels) as string[], width, height),
+          options(parsePalette(palette), JSON.parse(labels) as string[], { lang, time }, width, height),
           dataRef.current,
           container,
         );
@@ -129,7 +180,7 @@ export function Chart({ label, data, series, height = 240 }: ChartProps) {
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [palette, labels, height]);
+  }, [palette, labels, height, lang, time]);
 
   useEffect(() => {
     dataRef.current = data;

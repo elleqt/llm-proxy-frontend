@@ -1,8 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import type uPlot from "uplot";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { I18nProvider } from "../i18n";
+import { I18nProvider, useLang } from "../i18n";
+import { en } from "../i18n/en";
+import { ru } from "../i18n/ru";
 import { Chart, type ChartSeries } from "./Chart";
 
 // jsdom has no canvas, so uPlot itself cannot run here. A stand-in records
@@ -100,7 +103,34 @@ describe("Chart", () => {
 
     await waitFor(() => expect(plots).toHaveLength(2));
     expect(plots[0]!.destroyed).toBe(true);
-    expect(plots[1]!.opts.series.map((s) => s.label)).toEqual([undefined, "Requests", "Tokens"]);
+    expect(plots[1]!.opts.series.map((s) => s.label)).toEqual([en["ui.chartTime"], "Requests", "Tokens"]);
     expect(plots[1]!.data).toEqual([[0, 3600], [1, 2], [5, 6]]);
+  });
+
+  it("speaks the interface language in its legend and numbers, and follows a switch", async () => {
+    function Page() {
+      const [, setLang] = useLang();
+      return (
+        <>
+          <button type="button" onClick={() => setLang("ru")}>
+            RU
+          </button>
+          {chart([[0], [1234.5]], [{ label: "Requests" }])}
+        </>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Page />, { wrapper });
+    await waitFor(() => expect(plots).toHaveLength(1));
+    const legendValue = (plot: PlotRecord, v: number) =>
+      (plot.opts.series[1]?.value as (self: uPlot, v: number, s: number, i: number) => string)({} as uPlot, v, 1, 0);
+    expect(plots[0]!.opts.series[0]?.label).toBe(en["ui.chartTime"]);
+    expect(legendValue(plots[0]!, 1234.5)).toBe("1,234.5");
+
+    await user.click(screen.getByRole("button", { name: "RU" }));
+
+    await waitFor(() => expect(plots).toHaveLength(2));
+    expect(plots[1]!.opts.series[0]?.label).toBe(ru["ui.chartTime"]);
+    expect(legendValue(plots[1]!, 1234.5)).toMatch(/^1\s234,5$/);
   });
 });
