@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { authConfigQuery, OIDC_START_PATH } from "../../entities/session/authConfig";
 import { startSession } from "../../features/session/session";
 import { ApiError, client, unwrap } from "../../shared/api/client";
+import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Button, Spinner, TextField } from "../../shared/ui";
@@ -22,7 +23,7 @@ class LockedOutError extends ApiError {
   }
 }
 
-async function signIn(body: { email: string; password: string }) {
+async function signIn(body: components["schemas"]["LoginRequest"]) {
   const call = client.POST("/api/auth/login", { body });
   try {
     return await unwrap(call);

@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type MouseEvent } from "react";
 import { Link } from "react-router";
-import { rememberFreshToken, tokensQuery, type FreshToken } from "../../entities/token/tokens";
+import { handOffFreshToken, tokensQuery, type FreshToken } from "../../entities/token/tokens";
 import { ApiError, client, unwrap } from "../../shared/api/client";
-import { useErrorMessage, useT } from "../../shared/i18n";
+import type { components } from "../../shared/api/schema";
+import { useErrorMessage, useT, type MessageKey } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Button, CopyField, Modal, TextField } from "../../shared/ui";
 import styles from "./IssueToken.module.css";
@@ -28,28 +29,35 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState("");
-  const [labelError, setLabelError] = useState<string | null>(null);
+  // A key, not text: it is translated at render, so it follows a language switch.
+  const [labelError, setLabelError] = useState<MessageKey | null>(null);
   const [issued, setIssued] = useState<FreshToken | null>(null);
 
   const issue = useMutation({
-    mutationFn: (body: { label: string }) => unwrap(client.POST("/api/me/tokens", { body })),
-    onSuccess: ({ token, secret }) => {
-      const fresh = { id: token.id, label: token.label, secret };
-      rememberFreshToken(queryClient, fresh);
-      setIssued(fresh);
-      void queryClient.invalidateQueries({ queryKey: tokensQuery.queryKey });
-    },
+    mutationFn: (body: components["schemas"]["IssueTokenRequest"]) => unwrap(client.POST("/api/me/tokens", { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: tokensQuery.queryKey }),
+    // With reset() below, the response leaves the mutation cache at once.
+    gcTime: 0,
   });
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = label.trim();
     if (trimmed === "") {
-      setLabelError(t("issue.labelRequired"));
+      setLabelError("issue.labelRequired");
       return;
     }
     setLabelError(null);
-    issue.mutate({ label: trimmed });
+    issue.mutate(
+      { label: trimmed },
+      {
+        // The secret moves into this dialog's state and nowhere else.
+        onSuccess: ({ token, secret }) => {
+          setIssued({ id: token.id, label: token.label, secret });
+          issue.reset();
+        },
+      },
+    );
   };
 
   if (issued !== null) {
@@ -71,7 +79,9 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
       >
         <CopyField label={fill(t("issue.secretLabel"), { label: issued.label })} value={issued.secret} />
         <p>
-          <Link to="/connect">{t("issue.connect")}</Link>
+          <Link to="/connect" onClick={(event) => handOff(event, issued)}>
+            {t("issue.connect")}
+          </Link>
         </p>
       </Modal>
     );
@@ -89,7 +99,7 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
           autoComplete="off"
           autoFocus
           onChange={(event) => setLabel(event.target.value)}
-          error={labelError ?? fieldError}
+          error={labelError !== null ? t(labelError) : fieldError}
         />
         {issue.isError && fieldError === null && <p role="alert">{errorMessage(issue.error)}</p>}
         <div className={styles.actions}>
@@ -101,4 +111,13 @@ function IssueTokenDialog({ onClose }: { onClose: () => void }) {
       </form>
     </Modal>
   );
+}
+
+/**
+ * Hands the key to /connect when this click navigates there in this tab. A
+ * modified click opens another tab, which could not take it, so nothing is left behind.
+ */
+function handOff(event: MouseEvent, token: FreshToken): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  handOffFreshToken(token);
 }

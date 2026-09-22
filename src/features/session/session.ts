@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
+import { dropFreshToken } from "../../entities/token/tokens";
 import { meQuery } from "../../entities/user/me";
 import { client, UnauthenticatedError, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
@@ -9,8 +10,14 @@ import type { components } from "../../shared/api/schema";
  * and `me` is the signed-in user straight away.
  */
 export function startSession(queryClient: QueryClient, me: components["schemas"]["Me"]): void {
-  queryClient.clear();
+  endSession(queryClient);
   queryClient.setQueryData(meQuery.queryKey, me);
+}
+
+/** Forgets everything the session left in this tab: cached data and an untaken fresh key. */
+export function endSession(queryClient: QueryClient): void {
+  queryClient.clear();
+  dropFreshToken();
 }
 
 /**
@@ -22,7 +29,7 @@ export function useSignOut() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const end = () => {
-    queryClient.clear();
+    endSession(queryClient);
     void navigate("/login", { replace: true });
   };
   return useMutation({

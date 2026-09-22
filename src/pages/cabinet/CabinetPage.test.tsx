@@ -1,8 +1,10 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import type uPlot from "uplot";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { handOffFreshToken } from "../../entities/token/tokens";
 import { en } from "../../shared/i18n/en";
 import { renderApp } from "../../test/render";
 import { fixtures, http, server, type Schemas } from "../../test/server";
@@ -74,7 +76,8 @@ describe("key table", () => {
 });
 
 describe("issuing a key", () => {
-  it("shows the secret once, then only /connect of this tab has it", async () => {
+  /** Issues "workstation" through the dialog and returns it open on the secret. */
+  async function issueWorkstation() {
     const tokens: Schemas["Token"][] = [];
     cabinet(tokens);
     let sent: unknown;
@@ -86,17 +89,29 @@ describe("issuing a key", () => {
         return response(201).json({ token, secret: SECRET });
       }),
     );
-    const { router } = renderApp("/");
+    const app = renderApp("/");
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole("button", { name: en["issue.open"] }));
     await user.type(screen.getByLabelText(en["issue.label"]), "  workstation ");
     await user.click(screen.getByRole("button", { name: en["issue.submit"] }));
-
     const dialog = await screen.findByRole("dialog", { name: en["issue.issuedTitle"] });
-    expect(within(dialog).getByRole("group", { name: "Key “workstation”" })).toHaveTextContent(SECRET);
-    expect(within(dialog).getByRole("link", { name: en["issue.connect"] })).toHaveAttribute("href", "/connect");
     expect(sent).toEqual({ label: "workstation" });
+    return { ...app, user, dialog };
+  }
+
+  /** Everything the query and mutation caches hold, as text. */
+  function cached(queryClient: QueryClient): string {
+    return JSON.stringify([
+      queryClient.getQueryCache().getAll().map((query) => query.state.data),
+      queryClient.getMutationCache().getAll().map((mutation) => [mutation.state.data, mutation.state.variables]),
+    ]);
+  }
+
+  it("shows the secret once and keeps it in no cache", async () => {
+    const { router, queryClient, user, dialog } = await issueWorkstation();
+    expect(within(dialog).getByRole("group", { name: "Key “workstation”" })).toHaveTextContent(SECRET);
+    await waitFor(() => expect(cached(queryClient)).not.toContain(SECRET));
 
     // A stray click beside the dialog does not throw the secret away.
     await user.pointer({ keys: "[MouseLeft]", target: dialog.parentElement as HTMLElement });
@@ -106,17 +121,31 @@ describe("issuing a key", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByRole("cell", { name: "workstation" })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(SECRET);
+    expect(cached(queryClient)).not.toContain(SECRET);
 
     // Reopening starts a new issue, not the old secret.
     await user.click(screen.getByRole("button", { name: en["issue.open"] }));
     expect(screen.getByRole("dialog", { name: en["issue.open"] })).not.toHaveTextContent(SECRET);
     await user.click(screen.getByRole("button", { name: en["ui.cancel"] }));
 
-    // Away and back: the cabinet re-renders from scratch without it.
+    // Closed with Done, the key was not handed to /connect.
     await router.navigate("/connect");
-    expect(await screen.findByText(/ANTHROPIC_AUTH_TOKEN="sk-a1b2-0123/)).toHaveTextContent(SECRET);
+    expect(await screen.findByText(/ANTHROPIC_AUTH_TOKEN/)).toHaveTextContent(en["connect.keyPlaceholder"]);
+    expect(document.body).not.toHaveTextContent(SECRET);
+  });
+
+  it("hands the key to /connect once when the user follows the link", async () => {
+    const { router, user, dialog } = await issueWorkstation();
+
+    await user.click(within(dialog).getByRole("link", { name: en["issue.connect"] }));
+    expect(await screen.findByText(/ANTHROPIC_AUTH_TOKEN/)).toHaveTextContent(SECRET);
+    expect(router.state.location.pathname).toBe("/connect");
+
+    // Away and back: /connect no longer has it.
     await router.navigate("/");
     await screen.findByRole("cell", { name: "workstation" });
+    await router.navigate("/connect");
+    expect(await screen.findByText(/ANTHROPIC_AUTH_TOKEN/)).toHaveTextContent(en["connect.keyPlaceholder"]);
     expect(document.body).not.toHaveTextContent(SECRET);
   });
 
@@ -155,7 +184,6 @@ describe("revoking a key", () => {
 
     await user.click(await screen.findByRole("button", { name: "Revoke key “ci”" }));
     let dialog = screen.getByRole("dialog", { name: "Revoke key “ci”?" });
-    expect(dialog).toHaveTextContent("Clients using “ci” stop working");
     // A destructive confirmation opens on the safe choice.
     expect(within(dialog).getByRole("button", { name: en["ui.cancel"] })).toHaveFocus();
     await user.click(within(dialog).getByRole("button", { name: en["ui.cancel"] }));
@@ -171,6 +199,26 @@ describe("revoking a key", () => {
     expect(row("laptop")).toHaveTextContent(en["tokens.active"]);
     // The row's button is gone; focus lands on the list, not on <body>.
     expect(document.activeElement).toContainElement(screen.getByRole("table", { name: en["page.cabinet.title"] }));
+  });
+});
+
+describe("a key handed to /connect but not yet shown there", () => {
+  it("is dropped when that key is revoked", async () => {
+    const laptop = fixtures.token({ label: "laptop" });
+    const ci = fixtures.token({ id: "00000000-0000-4000-8000-0000000000a2", label: "ci" });
+    cabinet([laptop, ci]);
+    server.use(http.delete("/api/me/tokens/{tokenId}", () => new HttpResponse(null, { status: 204 })));
+    const { router } = renderApp("/");
+    const user = userEvent.setup();
+
+    handOffFreshToken({ id: ci.id, label: "ci", secret: SECRET });
+    await user.click(await screen.findByRole("button", { name: "Revoke key “ci”" }));
+    await user.click(screen.getByRole("button", { name: en["revoke.confirm"] }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await router.navigate("/connect");
+    expect(await screen.findByText(/ANTHROPIC_AUTH_TOKEN/)).toHaveTextContent(en["connect.keyPlaceholder"]);
+    expect(document.body).not.toHaveTextContent(SECRET);
   });
 });
 

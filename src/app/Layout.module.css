@@ -11,6 +11,11 @@
   gap: 0 1rem;
 }
 
+/* The switches, also when they wrap onto a row of their own: right, as on the instruction page. */
+.header > :last-child {
+  margin-left: auto;
+}
+
 .site {
   display: flex;
   flex-wrap: wrap;

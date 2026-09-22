@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type RefObject } from "react";
-import { forgetFreshToken, tokensQuery, type Token } from "../../entities/token/tokens";
+import { dropFreshToken, tokensQuery, type Token } from "../../entities/token/tokens";
 import { client, unwrap } from "../../shared/api/client";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
@@ -35,7 +35,7 @@ function RevokeTokenDialog({ token, returnFocus, onClose }: RevokeTokenProps & {
   const revoke = useMutation({
     mutationFn: () => unwrap(client.DELETE("/api/me/tokens/{tokenId}", { params: { path: { tokenId: token.id } } })),
     onSuccess: async () => {
-      forgetFreshToken(queryClient, token.id);
+      dropFreshToken(token.id);
       await queryClient.invalidateQueries({ queryKey: tokensQuery.queryKey });
       onClose();
     },

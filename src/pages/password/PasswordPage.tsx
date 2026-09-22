@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { meQuery, useMe } from "../../entities/user/me";
 import { SignOutButton } from "../../features/session/SignOutButton";
 import { ApiError, client, unwrap } from "../../shared/api/client";
-import { useErrorMessage, useT } from "../../shared/i18n";
+import { useErrorMessage, useT, type MessageKey } from "../../shared/i18n";
 import { Button, TextField } from "../../shared/ui";
 import styles from "./PasswordPage.module.css";
 
@@ -21,7 +21,8 @@ export function PasswordPage() {
   // Below the session guard `me` is loaded.
   const restricted = useMe().data?.restricted ?? false;
   const [values, setValues] = useState<Record<Field, string>>({ currentPassword: "", newPassword: "", repeat: "" });
-  const [invalid, setInvalid] = useState<Partial<Record<Field, string>>>({});
+  // Keys, not text: translated at render, so they follow a language switch.
+  const [invalid, setInvalid] = useState<Partial<Record<Field, MessageKey>>>({});
 
   const change = useMutation({
     mutationFn: async () => {
@@ -40,9 +41,9 @@ export function PasswordPage() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const found: Partial<Record<Field, string>> = {};
-    if (values.newPassword.length < MIN_LENGTH) found.newPassword = t("password.tooShort");
-    else if (values.repeat !== values.newPassword) found.repeat = t("password.mismatch");
+    const found: Partial<Record<Field, MessageKey>> = {};
+    if (values.newPassword.length < MIN_LENGTH) found.newPassword = "password.tooShort";
+    else if (values.repeat !== values.newPassword) found.repeat = "password.mismatch";
     setInvalid(found);
     if (Object.keys(found).length === 0) change.mutate();
   };
@@ -60,7 +61,13 @@ export function PasswordPage() {
           ? error.field
           : null
       : null;
-  const fieldError = (field: Field) => invalid[field] ?? (errorField === field ? errorMessage(error) : undefined);
+  const fieldError = (field: Field) => {
+    const key = invalid[field];
+    if (key !== undefined) return t(key);
+    return errorField === field ? errorMessage(error) : undefined;
+  };
+  // In a restricted session the only credential is the temporary password.
+  const expired = restricted && error instanceof ApiError && error.code === "invalid_credentials";
   const set = (field: Field) => (event: { target: { value: string } }) =>
     setValues((current) => ({ ...current, [field]: event.target.value }));
 
@@ -98,8 +105,8 @@ export function PasswordPage() {
         />
         {change.isError && errorField === null && (
           <div role="alert" className={styles.failure}>
-            <p>{errorMessage(error)}</p>
-            {restricted && error instanceof ApiError && error.code === "invalid_credentials" && <SignOutButton />}
+            <p>{expired ? t("password.temporaryExpired") : errorMessage(error)}</p>
+            {expired && <SignOutButton />}
           </div>
         )}
         <div>

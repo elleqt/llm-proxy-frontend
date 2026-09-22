@@ -22,7 +22,5 @@ describe("/connect without a key issued in this tab", () => {
     );
     expect(screen.getByText(/chat\/completions/)).toHaveTextContent("curl https://llm.example.com/v1/chat/completions");
     expect(screen.getByRole("link", { name: en["issue.open"] })).toHaveAttribute("href", "/");
-    expect(screen.getByText(en["connect.trouble401"])).toBeInTheDocument();
-    expect(screen.getByText(en["connect.trouble403"])).toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { en } from "../../shared/i18n/en";
+import { ru } from "../../shared/i18n/ru";
 import { renderApp } from "../../test/render";
 import { fixtures, http, server, type Schemas } from "../../test/server";
 
@@ -71,6 +72,37 @@ describe("/password in a restricted session", () => {
     expect(requests).toBe(0);
   });
 
+  it("refuses a repeat that does not match, before sending anything", async () => {
+    session(() => fixtures.me({ restricted: true }));
+    let requests = 0;
+    server.use(
+      http.post("/api/auth/password", () => {
+        requests += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderApp("/password");
+
+    const user = await fillNew(NEW_PASSWORD, `${NEW_PASSWORD}!`);
+    await user.click(screen.getByRole("button", { name: en["password.submit"] }));
+
+    expect(screen.getByLabelText(en["password.repeat"])).toHaveAccessibleDescription(en["password.mismatch"]);
+    expect(requests).toBe(0);
+  });
+
+  it("shows a refusal in the language chosen after it appeared", async () => {
+    session(() => fixtures.me({ restricted: true }));
+    renderApp("/password");
+
+    const user = await fillNew("short");
+    await user.click(screen.getByRole("button", { name: en["password.submit"] }));
+    await user.click(screen.getByRole("button", { name: en["prefs.lang.ru"] }));
+
+    expect(screen.getByLabelText(ru["password.new"])).toHaveAccessibleDescription(
+      `${ru["password.rules"]} ${ru["password.tooShort"]}`,
+    );
+  });
+
   it("says an expired temporary password needs a new one, and signs out from there", async () => {
     session(() => fixtures.me({ restricted: true }));
     server.use(
@@ -86,7 +118,7 @@ describe("/password in a restricted session", () => {
     await user.click(screen.getByRole("button", { name: en["password.submit"] }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(en["errorIn.password.invalid_credentials"]);
+    expect(alert).toHaveTextContent(en["password.temporaryExpired"]);
     expect(alert).not.toHaveTextContent(en["error.invalid_credentials"]);
     expect(router.state.location.pathname).toBe("/password");
 

@@ -3,8 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { en } from "../../shared/i18n/en";
+import { handOffFreshToken, takeFreshToken } from "../../entities/token/tokens";
 import { renderApp } from "../../test/render";
-import { fixtures, http, server, type Schemas } from "../../test/server";
+import { errorResponse, fixtures, http, server, type Schemas } from "../../test/server";
 
 function authConfig(config: Schemas["AuthConfig"]) {
   server.use(http.get("/api/auth/config", ({ response }) => response(200).json(config)));
@@ -47,6 +48,22 @@ describe("/login", () => {
     renderApp("/login");
 
     expect(await screen.findByRole("button", { name: en["login.oidcGeneric"] })).toBeInTheDocument();
+    expect(screen.queryByLabelText(en["login.email"])).not.toBeInTheDocument();
+  });
+
+  it("offers only the form when the identity provider is off", async () => {
+    authConfig({ localLogin: true, oidc: { enabled: false } });
+    renderApp("/login");
+
+    expect(await screen.findByLabelText(en["login.email"])).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign in with/ })).not.toBeInTheDocument();
+  });
+
+  it("says sign-in is unavailable when neither is offered", async () => {
+    authConfig({ localLogin: false, oidc: { enabled: false } });
+    renderApp("/login");
+
+    expect(await screen.findByText(en["login.unavailable"])).toBeInTheDocument();
     expect(screen.queryByLabelText(en["login.email"])).not.toBeInTheDocument();
   });
 
@@ -124,50 +141,106 @@ describe("/login", () => {
     );
   });
 
-  it("explains an identity-provider refusal passed back in ?error=", async () => {
+  it.each(["oidc_forbidden", "oidc_failed"] as const)("explains ?error=%s from the identity provider", async (code) => {
     authConfig(both);
-    renderApp("/login?error=oidc_forbidden");
+    renderApp(`/login?error=${code}`);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.oidc_forbidden"]);
+    expect(await screen.findByRole("alert")).toHaveTextContent(en[`error.${code}`]);
   });
 });
 
-describe("sign-out", () => {
-  it("forgets the first user's data: the next user never sees their keys", async () => {
-    authConfig(both);
-    const ada = fixtures.me();
-    cabinetOf(ada, [fixtures.token({ label: "ada-laptop" })]);
-    server.use(http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })));
-    const { router } = renderApp("/");
-    expect(await screen.findByText("ada-laptop")).toBeInTheDocument();
+/**
+ * Signs Bob in from /login and proves the cabinet never shows Ada's key: Bob's
+ * keys are held back until checked, so until they arrive only a stale cache
+ * could put anything in the table.
+ */
+async function signInAsBobSeeingOnlyBob() {
+  let releaseBob = () => {};
+  const bobTokens = new Promise<void>((resolve) => {
+    releaseBob = resolve;
+  });
+  const bob = fixtures.me({ id: "00000000-0000-4000-8000-000000000002", displayName: "Bob", email: "bob@example.com" });
+  server.use(
+    http.post("/api/auth/login", ({ response }) => response(200).json(bob)),
+    http.get("/api/me", ({ response }) => response(200).json(bob)),
+    http.get("/api/me/tokens", async ({ response }) => {
+      await bobTokens;
+      return response(200).json([fixtures.token({ id: "00000000-0000-4000-8000-0000000000b1", label: "bob-desktop" })]);
+    }),
+  );
+  await submitCredentials("bob@example.com");
 
-    const user = userEvent.setup();
+  expect(await screen.findByRole("heading", { level: 1, name: en["page.cabinet.title"] })).toBeInTheDocument();
+  expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
+  releaseBob();
+  expect(await screen.findByText("bob-desktop")).toBeInTheDocument();
+  expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
+}
+
+/** Ada is signed in and her cabinet, with her key, is on screen. */
+async function adaInHerCabinet() {
+  authConfig(both);
+  cabinetOf(fixtures.me(), [fixtures.token({ label: "ada-laptop" })]);
+  const app = renderApp("/");
+  expect(await screen.findByText("ada-laptop")).toBeInTheDocument();
+  return app;
+}
+
+const ADA_KEY = { id: "00000000-0000-4000-8000-0000000000a9", label: "ada-laptop", secret: "sk-ada-secret" };
+
+describe("session boundaries", () => {
+  it("sign-out forgets the first user's data: the next user never sees their keys", async () => {
+    server.use(http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })));
+    const { router } = await adaInHerCabinet();
+    handOffFreshToken(ADA_KEY);
+
     const nav = screen.getByRole("navigation", { name: en["nav.label"] });
-    await user.click(within(nav).getByRole("button", { name: en["session.signOut"] }));
+    await userEvent.click(within(nav).getByRole("button", { name: en["session.signOut"] }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    expect(takeFreshToken()).toBeNull();
 
-    // Bob's keys are held back until the check below: until they arrive the
-    // cabinet may show a spinner, never Ada's list.
-    let releaseBob = () => {};
-    const bobTokens = new Promise<void>((resolve) => {
-      releaseBob = resolve;
-    });
-    const bob = fixtures.me({ id: "00000000-0000-4000-8000-000000000002", displayName: "Bob", email: "bob@example.com" });
+    await signInAsBobSeeingOnlyBob();
+  });
+
+  it("treats a 401 from sign-out as signed out", async () => {
     server.use(
-      http.post("/api/auth/login", ({ response }) => response(200).json(bob)),
-      http.get("/api/me", ({ response }) => response(200).json(bob)),
-      http.get("/api/me/tokens", async ({ response }) => {
-        await bobTokens;
-        return response(200).json([fixtures.token({ id: "00000000-0000-4000-8000-0000000000b1", label: "bob-desktop" })]);
-      }),
+      http.post("/api/auth/logout", ({ response }) =>
+        response.untyped(errorResponse(401, { code: "unauthenticated", message: "" })),
+      ),
     );
-    await submitCredentials("bob@example.com");
+    const { router, queryClient } = await adaInHerCabinet();
 
-    expect(await screen.findByRole("heading", { level: 1, name: en["page.cabinet.title"] })).toBeInTheDocument();
-    expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
-    releaseBob();
-    expect(await screen.findByText("bob-desktop")).toBeInTheDocument();
-    expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: en["nav.label"] });
+    await userEvent.click(within(nav).getByRole("button", { name: en["session.signOut"] }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(["tokens"])).toBeUndefined();
+  });
+
+  it("a lost session (401) forgets everything before /login shows", async () => {
+    const { router, queryClient } = await adaInHerCabinet();
+    handOffFreshToken(ADA_KEY);
+    server.use(
+      http.get("/api/me/tokens", ({ response }) =>
+        response.untyped(errorResponse(401, { code: "unauthenticated", message: "" })),
+      ),
+    );
+
+    await queryClient.invalidateQueries({ queryKey: ["tokens"] });
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(["me"])).toBeUndefined();
+    expect(takeFreshToken()).toBeNull();
+  });
+
+  it("signing in over a session never shows the previous user's data", async () => {
+    const { router } = await adaInHerCabinet();
+    handOffFreshToken(ADA_KEY);
+
+    await router.navigate("/login");
+    await signInAsBobSeeingOnlyBob();
+    expect(takeFreshToken()).toBeNull();
   });
 });

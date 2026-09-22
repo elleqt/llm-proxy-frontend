@@ -31,8 +31,7 @@ export const en = {
   "error.password_change_required": "Change your temporary password to continue.",
   "error.invalid_credentials": "Wrong email or password.",
   // Context-specific overrides, looked up before `error.<code>` (see errorMessage).
-  "errorIn.password.invalid_credentials":
-    "The current password is wrong, or the temporary password has expired. An expired temporary password no longer works anywhere: ask an administrator for a new one.",
+  "errorIn.password.invalid_credentials": "The current password is wrong.",
   "error.locked_out": "Too many failed attempts. Try again later.",
   "error.oidc_disabled": "Sign-in through the identity provider is turned off.",
   "error.oidc_forbidden": "Your identity-provider account is not allowed to use this service.",
@@ -85,6 +84,8 @@ export const en = {
   "password.tooShort": "The password is shorter than 12 characters.",
   "password.mismatch": "The passwords do not match.",
   "password.submit": "Change password",
+  "password.temporaryExpired":
+    "Your temporary password has expired and no longer works anywhere, including sign-in. Ask an administrator for a new one.",
 
   "tokens.title": "Your keys",
   "tokens.label": "Label",

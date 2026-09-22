@@ -1,4 +1,4 @@
-import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 import { client, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
 
@@ -10,35 +10,30 @@ export const tokensQuery = queryOptions({
   queryFn: ({ signal }) => unwrap(client.GET("/api/me/tokens", { signal })),
 });
 
-/** A token issued in this tab, with its secret. */
+/** A token just issued in this tab, with its secret. */
 export interface FreshToken {
   id: string;
   label: string;
   secret: string;
 }
 
-// The secret lives in the query cache and nowhere else: memory of this tab
-// only, and gone with everything else when sign-in or sign-out clears the cache.
-const freshTokenQuery = queryOptions({
-  queryKey: ["fresh-token"],
-  queryFn: (): FreshToken | null => null,
-  staleTime: Infinity,
-  gcTime: Infinity,
-});
+// A single-use hand-off from the issue dialog to /connect, outside every
+// cache: the dialog puts the key here only when the user follows its /connect
+// link, and /connect takes it on mount, leaving the holder empty.
+let pending: FreshToken | null = null;
 
-export function rememberFreshToken(queryClient: QueryClient, token: FreshToken): void {
-  // Set before the data, so the entry is never collected while no screen shows it.
-  queryClient.setQueryDefaults(freshTokenQuery.queryKey, { staleTime: Infinity, gcTime: Infinity });
-  queryClient.setQueryData(freshTokenQuery.queryKey, token);
+export function handOffFreshToken(token: FreshToken): void {
+  pending = token;
 }
 
-/** Drops the fresh token if it is the one with `id` (e.g. it was just revoked). */
-export function forgetFreshToken(queryClient: QueryClient, id: string): void {
-  if (queryClient.getQueryData(freshTokenQuery.queryKey)?.id === id) {
-    queryClient.setQueryData(freshTokenQuery.queryKey, null);
-  }
+/** Returns the handed-off key, if any, and empties the holder. */
+export function takeFreshToken(): FreshToken | null {
+  const token = pending;
+  pending = null;
+  return token;
 }
 
-export function useFreshToken(): FreshToken | null {
-  return useQuery(freshTokenQuery).data ?? null;
+/** Drops a key not yet taken: on sign-in, sign-out, a lost session, or — for `id` only — its revocation. */
+export function dropFreshToken(id?: string): void {
+  if (id === undefined || pending?.id === id) pending = null;
 }

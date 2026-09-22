@@ -31,8 +31,7 @@ export const ru: Messages = {
   "error.unauthenticated": "Сеанс завершён. Войдите снова.",
   "error.password_change_required": "Смените временный пароль, чтобы продолжить.",
   "error.invalid_credentials": "Неверная почта или пароль.",
-  "errorIn.password.invalid_credentials":
-    "Текущий пароль неверен или срок временного пароля истёк. Истёкший временный пароль больше нигде не действует: попросите у администратора новый.",
+  "errorIn.password.invalid_credentials": "Текущий пароль неверен.",
   "error.locked_out": "Слишком много неудачных попыток. Попробуйте позже.",
   "error.oidc_disabled": "Вход через провайдера учётных записей отключён.",
   "error.oidc_forbidden": "Вашей учётной записи у провайдера не разрешён доступ к сервису.",
@@ -85,6 +84,8 @@ export const ru: Messages = {
   "password.tooShort": "Пароль короче 12 символов.",
   "password.mismatch": "Пароли не совпадают.",
   "password.submit": "Сменить пароль",
+  "password.temporaryExpired":
+    "Срок временного пароля истёк, он больше нигде не действует, в том числе при входе. Попросите у администратора новый.",
 
   "tokens.title": "Ваши ключи",
   "tokens.label": "Ярлык",

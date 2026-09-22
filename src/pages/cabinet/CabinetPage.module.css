@@ -51,8 +51,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Not absolutely positioned: inside the table's scroll box an absolute box
+   would escape it and widen the page. */
 .visuallyHidden {
-  position: absolute;
+  display: inline-block;
   width: 1px;
   height: 1px;
   overflow: hidden;
