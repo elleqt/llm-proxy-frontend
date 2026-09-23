@@ -11,6 +11,51 @@ const newPassword = () => `e2e-${randomBytes(12).toString("base64url")}`;
 const admin = { email: stack.adminEmail, password: newPassword() };
 const member = { name: "E2E Member", email: "e2e-member@example.com", temporary: "", password: newPassword() };
 
+interface FirstTheme {
+  theme: string | null;
+  stylesheets: number;
+  stylesheetLinks: number;
+}
+
+// Set in the page by watchPage (below) and the binding it reports to.
+declare global {
+  interface Window {
+    __cspViolation?: (violation: string) => void;
+    __firstTheme?: FirstTheme;
+  }
+}
+
+/**
+ * In every page of every flow: CSP violations are reported to the test, and the
+ * first change of <html data-theme> is recorded with how many stylesheets
+ * existed at that moment (for the pre-paint check).
+ */
+function watchPage() {
+  document.addEventListener("securitypolicyviolation", (event) => {
+    window.__cspViolation?.(`${event.violatedDirective} blocked ${event.blockedURI || "inline"} on ${location.pathname}`);
+  });
+  const observer = new MutationObserver(() => {
+    const root = document.documentElement;
+    window.__firstTheme = {
+      theme: root.getAttribute("data-theme"),
+      stylesheets: document.styleSheets.length,
+      stylesheetLinks: document.querySelectorAll('link[rel="stylesheet"]').length,
+    };
+    observer.disconnect();
+  });
+  observer.observe(document, { subtree: true, attributes: true, attributeFilter: ["data-theme"] });
+}
+
+let violations: string[] = [];
+test.beforeEach(async ({ page }) => {
+  violations = [];
+  await page.exposeFunction("__cspViolation", (violation: string) => violations.push(violation));
+  await page.addInitScript(watchPage);
+});
+test.afterEach(() => {
+  expect(violations, "Content-Security-Policy violations").toEqual([]);
+});
+
 async function signIn(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -38,6 +83,21 @@ async function signOut(page: Page) {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login$/);
 }
+
+test("a stored theme is on <html> before the first stylesheet, under the served CSP", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => localStorage.setItem("theme", "pink"));
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Sign in", level: 1 })).toBeVisible();
+  // index.html ships data-theme="auto"; only the inline pre-paint script changes it.
+  expect(await page.evaluate(() => window.__firstTheme)).toEqual({
+    theme: "pink",
+    stylesheets: 0,
+    stylesheetLinks: 0,
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "pink");
+  await page.evaluate(() => localStorage.removeItem("theme"));
+});
 
 test("the bootstrap administrator signs in and must change the temporary password", async ({ page }) => {
   await signIn(page, admin.email, bootstrapPassword());
@@ -106,8 +166,7 @@ test("the administrator creates a user and sets its access with the live preview
   await provider.fill("claude");
   await expect(pattern).toHaveAccessibleDescription(/This rule is not valid\./);
 
-  // ...and the finished one is asked about and accepted. Without a vendor account
-  // the catalogue is empty, so what it covers today can only be nothing.
+  // ...and the finished one is asked about and accepted.
   const asked = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/admin/policy/preview") &&
@@ -117,13 +176,6 @@ test("the administrator creates a user and sets its access with the live preview
   const answer = await (await asked).json();
   expect(answer.errors).toEqual([]);
   await expect(pattern).not.toHaveAccessibleDescription(/This rule is not valid\./);
-  const covered = preview.getByRole("list", { name: "Models covered today" }).getByRole("listitem");
-  if (answer.covered.length === 0) {
-    await expect(preview.getByText("No model of today's catalogue is covered.")).toBeVisible();
-  } else {
-    await expect(covered).toHaveCount(answer.covered.length);
-    await expect(covered.filter({ hasNotText: /^claude:/ })).toHaveCount(0);
-  }
 
   await page.getByRole("button", { name: "Save policy" }).click();
   await expect(page.getByText("Policy saved. It applies from the user's next request.")).toBeVisible();

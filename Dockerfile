@@ -17,11 +17,14 @@ RUN sed -i -e '/^user /d' -e 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.c
  && chown -R nginx:nginx /var/cache/nginx /etc/nginx/conf.d
 COPY --from=build /tmp/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /src/dist /usr/share/nginx/html
+COPY --chmod=755 nginx/real-ip.sh /docker-entrypoint.d/40-real-ip.sh
 
 # BACKEND_ORIGIN: scheme://host[:port] of the backend's web listener, no path.
+# REAL_IP_FROM (unset by default): comma-separated addresses/CIDRs of the
+# reverse proxies in front of this container, trusted for X-Forwarded-For.
 # The application is served at the site root; the base path is fixed at "/"
 # (mount it on its own host name, or behind a proxy that strips a prefix).
-ENV BACKEND_ORIGIN=http://backend:8080 \
+ENV BACKEND_ORIGIN=http://backend:8081 \
     NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
     NGINX_ENVSUBST_FILTER=^(BACKEND_ORIGIN|NGINX_LOCAL_RESOLVERS)$
 

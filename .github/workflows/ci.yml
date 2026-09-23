@@ -43,11 +43,15 @@ jobs:
           tags: llm-proxy-frontend:ci
       - name: Serves the build and reports healthy
         run: |
-          docker run -d --name frontend -e BACKEND_ORIGIN=http://127.0.0.1:9 llm-proxy-frontend:ci
+          docker run -d --name frontend -p 127.0.0.1:8080:8080 -e BACKEND_ORIGIN=http://127.0.0.1:9 llm-proxy-frontend:ci
           for _ in $(seq 30); do
-            status=$(docker inspect -f '{{.State.Health.Status}}' frontend)
+            status=$(docker inspect -f '{{.State.Health.Status}}' frontend || echo gone)
             [ "$status" = healthy ] && break
             sleep 1
           done
-          docker exec frontend wget -qO- http://127.0.0.1:8080/ | grep -q '<div id="root">'
           [ "$status" = healthy ] || { docker logs frontend; exit 1; }
+      - name: Headers (CSP, security, caching)
+        run: nginx/check-headers.sh http://127.0.0.1:8080
+      - name: Container log on failure
+        if: failure()
+        run: docker logs frontend || true

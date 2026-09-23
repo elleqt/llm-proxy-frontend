@@ -22,6 +22,14 @@ map $uri $cache_control {
     default    "no-cache";
 }
 
+# X-Forwarded-For plus the hop that connected to us. $realip_remote_addr is
+# that peer even when the realip module has replaced $remote_addr with the
+# client (appending $remote_addr would repeat the client and lose the proxy).
+map $http_x_forwarded_for $forwarded_for {
+    default "$http_x_forwarded_for, $realip_remote_addr";
+    ""      $realip_remote_addr;
+}
+
 server {
     listen 8080;
     root /usr/share/nginx/html;
@@ -61,16 +69,19 @@ server {
 
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $forwarded_for;
         proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        # The client: the TCP peer, or with REAL_IP_FROM set, the address the
+        # trusted proxies put in X-Forwarded-For (see nginx/real-ip.sh).
         proxy_set_header X-Real-IP $remote_addr;
 
         proxy_connect_timeout 5s;
         # Provider sign-in completion may take ~90 s server-side; nothing streams.
         proxy_send_timeout 120s;
         proxy_read_timeout 120s;
-        # The admin API takes JSON documents (policies, settings, prices), not uploads.
-        client_max_body_size 1m;
+        # Above the backend's own 1 MiB cap, so an oversize request gets the
+        # backend's JSON payload_too_large rather than nginx's HTML page.
+        client_max_body_size 2m;
     }
 
     # Client-side routes: any other path is the application.
