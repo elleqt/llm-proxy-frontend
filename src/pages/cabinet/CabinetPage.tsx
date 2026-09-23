@@ -21,8 +21,8 @@ export function CabinetPage() {
       <NoModelAccessNotice />
       <div className={styles.sections}>
         <Tokens />
-        <AvailableModels />
         <UsageSection />
+        <AvailableModels />
       </div>
     </>
   );
