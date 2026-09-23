@@ -24,7 +24,7 @@ All screenshots use the in-browser mock API (`VITE_MOCK_API=1`, see [Development
 
 ## Running it
 
-This repository is not run on its own. The whole system — Postgres, the backend and this frontend — starts from the docker compose file in the backend repository, which runs the published images of both; follow the backend's [Quick start](https://github.com/elleqt/llm-proxy-backend#quick-start).
+This repository is not run on its own. The whole system — Postgres, the backend and this frontend — starts from a docker compose file in the backend repository (a minimal one and a full one), which runs the published images of both; follow the backend's [Quick start](https://github.com/elleqt/llm-proxy-backend#quick-start).
 
 In that stack the web interface is published on port 8081 and the proxied LLM API on port 8080.
 
@@ -44,17 +44,17 @@ The image is published on Docker Hub as [`yoonaowo/llm-proxy-frontend`](https://
 
 | Tag | What it is |
 |---|---|
-| `X.Y.Z` (e.g. `0.1.0`) | A release, built from the `vX.Y.Z` git tag. Never moves. |
+| `X.Y.Z` | A release, built from the `vX.Y.Z` git tag. Never moves. |
 | `X.Y` | The latest `X.Y.*` release (and `X`, from 1.0 on). |
 | `latest` | The latest release. |
 | `edge` | The current `main` branch; changes with every push. |
 | `sha-<commit>` | One commit on `main`, by its short hash. |
 
-Use the same version as the backend image (`yoonaowo/llm-proxy-backend`): the two are released together, and each frontend release is built against that backend's API contract. The backend's compose file takes both from one `LLMPROXY_VERSION`.
+Use the same version as the backend image (`yoonaowo/llm-proxy-backend`): the two are released together, and each frontend release is built against that backend's API contract. The backend's compose files name both images with the same tag: change the two together. The current release is on the [releases page](https://github.com/elleqt/llm-proxy-frontend/releases) and the [Docker Hub tags page](https://hub.docker.com/r/yoonaowo/llm-proxy-frontend/tags).
 
 CI checks every tag it publishes: each platform of the pushed image is started and must answer `/healthz`, and the amd64 image must pass the header check below.
 
-The [`Dockerfile`](Dockerfile) builds the application with Node 22 and serves the static build with unprivileged nginx (alpine) on port 8080. Requests under `/api/` are proxied to the backend's web listener; every other path that is not a file is the single-page application (`index.html`).
+The [`Dockerfile`](Dockerfile) builds the application with Node.js (the `node` image in the Dockerfile) and serves the static build with unprivileged nginx (alpine) on port 8080. Requests under `/api/` are proxied to the backend's web listener; every other path that is not a file is the single-page application (`index.html`).
 
 Runtime environment variables:
 
@@ -77,7 +77,7 @@ What the image does besides serving files:
 
 ## Development
 
-Requires Node.js 22.22 or newer (`engines` in `package.json`; CI and the image use Node 22).
+Requires the Node.js version in `engines` in `package.json`; CI and the image use the same major version.
 
 ```sh
 npm ci
@@ -104,7 +104,7 @@ Sign in as `admin@example.com` with the password `password` (any address works w
 | `npm test` | Type-checks, then runs the unit and component tests (Vitest, jsdom). |
 | `npm run build` | Type-checks and builds the static site into `dist/`. |
 | `npm run preview` | Serves the built `dist/` locally. |
-| `npm run e2e:stack` | End-to-end tests (Playwright) against the real system: builds the backend (from `../backend`, override with `BACKEND_DIR`) and this checkout from source with the backend's `docker-compose.yml` and `docker-compose.build.yml` — published images are never pulled — starts the stack, waits until it is healthy, runs the tests and tears everything down, including volumes and the images it built. Needs Docker with compose v2, ports 8080 and 8081 free, and a browser: `npx playwright install chromium` or `E2E_CHROMIUM_PATH` pointing at a Chrome/Chromium binary. Extra arguments go to `playwright test`. |
+| `npm run e2e:stack` | End-to-end tests (Playwright) against the real system: builds the backend (from `../backend`, override with `BACKEND_DIR`) and this checkout from source with the backend's `docker-compose.yml` and `docker-compose.build.yml`, plus a generated override that sets a random database password — published images are never pulled — starts the stack, waits until it is healthy, runs the tests and tears everything down, including volumes and the images it built. Needs Docker with compose v2, ports 8080 and 8081 free, and a browser: `npx playwright install chromium` or `E2E_CHROMIUM_PATH` pointing at a Chrome/Chromium binary. Extra arguments go to `playwright test`. |
 | `npm run e2e` | Only the Playwright run, against a stack that is already up; the variables it needs are set by `scripts/e2e-stack.sh`. |
 
 There is no separate lint or format script; `tsc` runs as part of `npm test` and `npm run build`. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the build, the tests and the generated-types check. On a pull request it also builds the image for both platforms and checks the amd64 image's health and headers; on a push to `main` or a `v*` tag it publishes the image to Docker Hub and then smoke-tests what it pushed.

@@ -6,9 +6,11 @@
 #
 # The stack is the backend's docker-compose.yml (published images) with its
 # docker-compose.build.yml (source builds) on top, plus a throwaway override
-# that builds the frontend from this checkout and gives both images names of
-# this run's own. Published images are never pulled: the run tests this working
-# tree and the backend checkout beside it.
+# that builds the frontend from this checkout, gives both images names of this
+# run's own and replaces the compose file's placeholder database password with a
+# random one. Everything else, the bootstrap administrator's email included, is
+# the compose file's own value. Published images are never pulled: the run tests
+# this working tree and the backend checkout beside it.
 #
 # Prerequisites:
 #   - Docker with the compose plugin (v2), and ports 8080 and 8081 free: the
@@ -35,22 +37,21 @@ export E2E_COMPOSE_PROJECT="${E2E_COMPOSE_PROJECT:-llmproxy-e2e}"
 backend_image="$E2E_COMPOSE_PROJECT-backend:e2e"
 frontend_image="$E2E_COMPOSE_PROJECT-frontend:e2e"
 
-# Throwaway values for a stack that lives only for this run.
+# A throwaway database password for a stack that lives only for this run.
 workdir="$(mktemp -d)"
-env_file="$workdir/.env"
-cat >"$env_file" <<EOF
-POSTGRES_USER=llmproxy
-POSTGRES_PASSWORD=$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')
-POSTGRES_DB=llmproxy
-LLMPROXY_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-EOF
+db_password="$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')"
 override="$workdir/docker-compose.e2e.yml"
 cat >"$override" <<EOF
 services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: "$db_password"
   backend:
     image: $backend_image
     build: {context: "$backend"}
     pull_policy: build
+    environment:
+      PGPASSWORD: "$db_password"
   frontend:
     image: $frontend_image
     build: {context: "$frontend"}
@@ -59,11 +60,10 @@ EOF
 
 # Colon-separated, like COMPOSE_FILE; e2e/stack.ts reads the backend log with it.
 export E2E_COMPOSE_FILES="$backend/docker-compose.yml:$backend/docker-compose.build.yml:$override"
-export E2E_COMPOSE_ENV_FILE="$env_file"
 export E2E_ADMIN_EMAIL=admin@example.com
 export E2E_BASE_URL=http://localhost:8081
 export E2E_API_URL=http://localhost:8080
-compose=(docker compose -p "$E2E_COMPOSE_PROJECT" --env-file "$env_file"
+compose=(docker compose -p "$E2E_COMPOSE_PROJECT"
 	-f "$backend/docker-compose.yml" -f "$backend/docker-compose.build.yml" -f "$override")
 
 teardown() {

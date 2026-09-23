@@ -17,14 +17,7 @@ export function bootstrapPassword(): string {
   if (!project || files.length === 0) {
     throw new Error("E2E_COMPOSE_PROJECT and E2E_COMPOSE_FILES must name the running compose stack");
   }
-  const envFile = process.env.E2E_COMPOSE_ENV_FILE;
-  const args = [
-    "compose",
-    "-p",
-    project,
-    ...files.flatMap((file) => ["-f", file]),
-    ...(envFile ? ["--env-file", envFile] : []),
-  ];
+  const args = ["compose", "-p", project, ...files.flatMap((file) => ["-f", file])];
   const logs = execFileSync("docker", [...args, "logs", "--no-color", "--no-log-prefix", "backend"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
