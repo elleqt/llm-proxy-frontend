@@ -225,6 +225,19 @@ async function adaInHerCabinet() {
 
 const ADA_KEY = { id: "00000000-0000-4000-8000-0000000000a9", label: "ada-laptop", secret: "sk-ada-secret" };
 
+/**
+ * Waits until the app shows the sign-in screen: at /login, without the signed-in
+ * navigation. The router's location changes before React renders the new page,
+ * so waiting on the location alone leaves the previous screen in the document
+ * for a while on a busy machine.
+ */
+async function onSignInScreen(router: { state: { location: { pathname: string } } }) {
+  await waitFor(() => {
+    expect(router.state.location.pathname).toBe("/login");
+    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+  });
+}
+
 describe("session boundaries", () => {
   it("sign-out forgets the first user's data: the next user never sees their keys", async () => {
     server.use(http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })));
@@ -233,8 +246,7 @@ describe("session boundaries", () => {
 
     const nav = screen.getByRole("navigation", { name: en["nav.label"] });
     await userEvent.click(within(nav).getByRole("button", { name: en["session.signOut"] }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    await onSignInScreen(router);
     expect(takeFreshToken()).toBeNull();
 
     await signInAsBobSeeingOnlyBob();
@@ -250,8 +262,7 @@ describe("session boundaries", () => {
 
     const nav = screen.getByRole("navigation", { name: en["nav.label"] });
     await userEvent.click(within(nav).getByRole("button", { name: en["session.signOut"] }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    await onSignInScreen(router);
     expect(queryClient.getQueryData(["tokens"])).toBeUndefined();
   });
 
@@ -266,8 +277,7 @@ describe("session boundaries", () => {
 
     await queryClient.invalidateQueries({ queryKey: ["tokens"] });
 
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
+    await onSignInScreen(router);
     expect(queryClient.getQueryData(["me"])).toBeUndefined();
     expect(takeFreshToken()).toBeNull();
   });
@@ -318,7 +328,7 @@ describe("session boundaries", () => {
 
     await userEvent.click(within(otherNav).getByRole("button", { name: en["session.signOut"] }));
 
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    await onSignInScreen(router);
     expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
   });
 });
