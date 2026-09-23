@@ -377,3 +377,68 @@
     color: var(--dim);
   }
 }
+
+/* Vendor accounts: actions one above the other keep the last column narrow. */
+.stackedActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.stackedActions button {
+  white-space: nowrap;
+}
+
+.accountName {
+  overflow-wrap: anywhere;
+}
+
+.lastError {
+  display: block;
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+
+/* On a phone each account becomes a card: name line, then the rest stacked. */
+@media (max-width: 40rem) {
+  .providerTable thead {
+    display: none;
+  }
+
+  .providerTable :is(table, tbody) {
+    display: block;
+  }
+
+  .providerTable table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .providerTable table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .providerTable table td:nth-child(n + 4) {
+    flex-basis: 100%;
+    text-align: start;
+  }
+
+  .providerTable .stackedActions {
+    flex-direction: row;
+  }
+
+  .providerTable .quotas {
+    min-width: 0;
+  }
+
+  .providerTable .quotaText {
+    white-space: normal;
+  }
+}

@@ -276,6 +276,24 @@ let accounts: Schemas["ProviderAccount"][] = [
     ],
   },
   {
+    id: "chatgpt-research-team-shared-account@example.com",
+    provider: "chatgpt",
+    email: "research-team-shared-account@subdivision.example.com",
+    status: "active",
+    disabled: false,
+    lastError: null,
+    lastRefreshedAt: ago(3 * HOUR),
+    quota: [
+      { window: "5h", usedRatio: 1, resetAt: ago(10 * 60_000), observedAt: ago(20 * 60_000) },
+      {
+        window: "7d",
+        usedRatio: 0.61,
+        resetAt: new Date(Date.now() + 400 * 24 * HOUR).toISOString(),
+        observedAt: ago(20 * 60_000),
+      },
+    ],
+  },
+  {
     id: "claude-spare@example.com",
     provider: "claude",
     label: "spare",
@@ -533,7 +551,11 @@ const handlers = [
       restricted: email.startsWith("temp"),
       // "noaccess" in the address: no rules; "idp" too: the policy comes from groups.
       // "nomatch": rules that match nothing in the catalogue.
-      policy: email.includes("noaccess") ? [] : email.includes("nomatch") ? ["mistral:*"] : ["claude:*", "chatgpt:gpt-6*"],
+      policy: email.includes("noaccess")
+        ? []
+        : email.includes("nomatch")
+          ? ["mistral:*"]
+          : ["claude:*", "chatgpt:gpt-6*"],
       policySource: email.includes("idp") ? "idp" : "local",
     };
     return response(200).json(me);
@@ -543,7 +565,10 @@ const handlers = [
     const covered = preview(me.policy).covered;
     const providers = [...new Set(covered.map((entry) => entry.provider))].sort().map((name) => ({
       name,
-      models: covered.filter((entry) => entry.provider === name).map((entry) => entry.model).sort(),
+      models: covered
+        .filter((entry) => entry.provider === name)
+        .map((entry) => entry.model)
+        .sort(),
     }));
     return response(200).json({ providers });
   }),

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
@@ -8,6 +8,7 @@ import { fill } from "../../../shared/lib/template";
 import { Badge, Button, EmptyState, Spinner, Table, type Column } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
 import styles from "../admin.module.css";
+import { quotaReset } from "./quotaReset";
 
 export function AdminProvidersPage() {
   const t = useT();
@@ -17,6 +18,12 @@ export function AdminProvidersPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
   const percent = new Intl.NumberFormat(lang, { style: "percent" });
+  // "resets in 4 h 12 min" counts down while the page is open.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const columns: Column<ProviderAccount>[] = [
     {
@@ -26,7 +33,17 @@ export function AdminProvidersPage() {
       sortValue: (a) => a.provider,
       cell: (a) => a.provider,
     },
-    { id: "name", header: t("providers.account"), sortValue: (a) => accountName(a), cell: (a) => accountName(a) },
+    {
+      id: "name",
+      header: t("providers.account"),
+      sortValue: (a) => accountName(a),
+      // A long address wraps anywhere rather than widening the table.
+      cell: (a) => (
+        <span className={styles.accountName} title={accountName(a)}>
+          {accountName(a)}
+        </span>
+      ),
+    },
     {
       id: "status",
       header: t("admin.status"),
@@ -49,18 +66,27 @@ export function AdminProvidersPage() {
       id: "lastError",
       header: t("providers.lastError"),
       cell: (a) =>
-        a.lastError ? <span className={styles.error}>{a.lastError}</span> : <span className={styles.dim}>—</span>,
+        a.lastError ? (
+          <span className={`${styles.error} ${styles.lastError}`}>{a.lastError}</span>
+        ) : (
+          <span className={styles.dim}>—</span>
+        ),
     },
     {
       id: "refreshed",
-      header: t("providers.refreshed"),
+      header: <span title={t("providers.refreshedHint")}>{t("providers.refreshed")}</span>,
       sortValue: (a) => (a.lastRefreshedAt == null ? null : Date.parse(a.lastRefreshedAt)),
-      cell: (a) =>
-        a.lastRefreshedAt == null ? (
-          <span className={styles.never}>{t("providers.never")}</span>
-        ) : (
-          dateTime.format(new Date(a.lastRefreshedAt))
-        ),
+      cell: (a) => (
+        <>
+          {/* The header, repeated where a narrow screen lays the row out as a card. */}
+          <span className={styles.rateLabel}>{t("providers.refreshed")}</span>
+          {a.lastRefreshedAt == null ? (
+            <span className={styles.never}>{t("providers.never")}</span>
+          ) : (
+            dateTime.format(new Date(a.lastRefreshedAt))
+          )}
+        </>
+      ),
     },
     {
       id: "quota",
@@ -89,10 +115,12 @@ export function AdminProvidersPage() {
                       style={{ width: `${Math.min(1, Math.max(0, window.usedRatio)) * 100}%` }}
                     />
                   </span>
-                  <span className={styles.quotaText}>
+                  <span
+                    className={styles.quotaText}
+                    title={window.resetAt == null ? undefined : dateTime.format(new Date(window.resetAt))}
+                  >
                     {used}
-                    {window.resetAt != null &&
-                      ` · ${fill(t("providers.resets"), { time: dateTime.format(new Date(window.resetAt)) })}`}
+                    {window.resetAt != null && ` · ${quotaReset(window.resetAt, now, lang, t)}`}
                   </span>
                 </li>
               );
@@ -105,7 +133,7 @@ export function AdminProvidersPage() {
       header: <span className={styles.visuallyHidden}>{t("tokens.actions")}</span>,
       align: "end",
       cell: (a) => (
-        <div className={styles.rowActions}>
+        <div className={styles.stackedActions}>
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>
@@ -128,7 +156,7 @@ export function AdminProvidersPage() {
       ) : accounts.data.length === 0 ? (
         <EmptyState title={t("providers.empty")} body={t("providers.emptyBody")} />
       ) : (
-        <div ref={listRef} tabIndex={-1}>
+        <div ref={listRef} tabIndex={-1} className={styles.providerTable}>
           <Table label={t("page.admin.providers.title")} columns={columns} rows={accounts.data} rowKey={(a) => a.id} />
         </div>
       )}

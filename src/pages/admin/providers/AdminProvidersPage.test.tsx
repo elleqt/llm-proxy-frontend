@@ -177,7 +177,7 @@ describe("account table", () => {
     providers([
       fixtures.providerAccount({
         quota: [
-          { window: "5h", usedRatio: 0.4, resetAt: "2026-09-23T12:00:00Z" },
+          { window: "5h", usedRatio: 0.4, resetAt: new Date(Date.now() + 2 * 3_600_000 + 30 * 60_000).toISOString() },
           { window: "7d", usedRatio: 0.9, resetAt: null },
         ],
       }),
@@ -186,7 +186,9 @@ describe("account table", () => {
 
     const fiveHours = await screen.findByRole("meter", { name: fill(en["providers.quotaLabel"], { window: "5h" }) });
     expect(fiveHours).toHaveAttribute("aria-valuenow", "40");
-    expect(fiveHours.parentElement).toHaveTextContent(/40%.*resets/);
+    expect(fiveHours.parentElement).toHaveTextContent(/40%.*resets in 2 h 30 min/);
+    // The exact moment is a tooltip away.
+    expect(within(fiveHours.parentElement as HTMLElement).getByText(/resets in/)).toHaveAttribute("title");
     const week = screen.getByRole("meter", { name: fill(en["providers.quotaLabel"], { window: "7d" }) });
     expect(week).toHaveAttribute("aria-valuenow", "90");
     expect(week.parentElement).not.toHaveTextContent("resets");
