@@ -66,8 +66,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
 
         proxy_connect_timeout 5s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        # Provider sign-in completion may take ~90 s server-side; nothing streams.
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
         # The admin API takes JSON documents (policies, settings, prices), not uploads.
         client_max_body_size 1m;
     }
