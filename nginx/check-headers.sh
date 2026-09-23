@@ -28,6 +28,8 @@ security() { # every response, errors included
 	lacks "$1" "$2" "^content-security-policy: .*unsafe-" "CSP allows something unsafe"
 	has "$1" "$2" "^x-content-type-options: nosniff$" "no X-Content-Type-Options: nosniff"
 	has "$1" "$2" "^referrer-policy: strict-origin-when-cross-origin$" "wrong or missing Referrer-Policy"
+	has "$1" "$2" "^cross-origin-opener-policy: same-origin$" "no Cross-Origin-Opener-Policy: same-origin"
+	has "$1" "$2" "^permissions-policy: camera=\(\), microphone=\(\), geolocation=\(\), payment=\(\), usb=\(\)$" "wrong or missing Permissions-Policy"
 	lacks "$1" "$2" "^server: nginx/" "server version exposed"
 }
 

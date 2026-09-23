@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS build
+FROM node:22-alpine@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ RUN npm run build \
  && node nginx/csp-hash.mjs dist/index.html nginx/default.conf.template /tmp/default.conf.template
 
 # The alpine variant is required: the compose healthcheck calls BusyBox wget.
-FROM nginx:1.30-alpine
+FROM nginx:1.30-alpine@sha256:985220252f3863977e468f611ef118ebd01421289dd86ee1ae99cb068c3bce2b
 # Unprivileged: no `user` switch, pid file in /tmp, and the paths nginx and the
 # entrypoint's template step write to owned by the nginx user.
 RUN sed -i -e '/^user /d' -e 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
