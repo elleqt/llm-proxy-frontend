@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { connectInfoQuery } from "../../entities/connect/connectInfo";
 import { takeFreshToken, type FreshToken } from "../../entities/token/tokens";
+import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Spinner } from "../../shared/ui";
@@ -62,6 +63,7 @@ export function ConnectPage() {
   return (
     <>
       <h1>{t("page.connect.title")}</h1>
+      <NoModelAccessNotice />
       <p>{t("connect.intro")}</p>
       {fresh !== null ? (
         <p>{fill(t("connect.fresh"), { label: fresh.label })}</p>

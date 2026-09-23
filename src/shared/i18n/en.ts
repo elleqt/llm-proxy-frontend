@@ -94,6 +94,11 @@ export const en = {
   "password.temporaryExpired":
     "Your temporary password has expired and no longer works anywhere, including sign-in. Ask an administrator for a new one.",
 
+  "access.none": "You don't have access to any model yet, so requests with your keys will be refused.",
+  "access.askIdp": "Access comes from your groups in {provider}; ask an administrator to add you to one.",
+  "access.askAdmin": "Ask an administrator to grant it.",
+  "access.providerFallback": "the identity provider",
+
   "tokens.title": "Your keys",
   "tokens.label": "Label",
   "tokens.prefix": "Prefix",

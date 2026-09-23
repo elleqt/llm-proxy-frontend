@@ -1,0 +1,9 @@
+/* The app's notice: a code-coloured panel with an accent rule on the left. */
+.notice {
+  margin: 0.75rem 0 1.25rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}

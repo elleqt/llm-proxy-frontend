@@ -4,6 +4,7 @@ import { tokensQuery, type Token } from "../../entities/token/tokens";
 import { PERIODS, usageQuery, usageSeries, type ModelUsage, type Period } from "../../entities/usage/usage";
 import { IssueToken } from "../../features/issue-token/IssueToken";
 import { RevokeToken } from "../../features/revoke-token/RevokeToken";
+import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
 import { Badge, Button, Card, Chart, EmptyState, Spinner, Table, type Column } from "../../shared/ui";
 import styles from "./CabinetPage.module.css";
@@ -13,6 +14,7 @@ export function CabinetPage() {
   return (
     <>
       <h1>{t("page.cabinet.title")}</h1>
+      <NoModelAccessNotice />
       <div className={styles.sections}>
         <Tokens />
         <UsageSection />

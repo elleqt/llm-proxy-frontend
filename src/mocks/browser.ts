@@ -504,8 +504,9 @@ const handlers = [
       email,
       role: email.startsWith("admin") ? "admin" : "user",
       restricted: email.startsWith("temp"),
-      policy: ["claude:*"],
-      policySource: "local",
+      // "noaccess" in the address: no model allowed; "idp" too: the policy comes from groups.
+      policy: email.includes("noaccess") ? [] : ["claude:*"],
+      policySource: email.includes("idp") ? "idp" : "local",
     };
     return response(200).json(me);
   }),
