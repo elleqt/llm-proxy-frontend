@@ -65,12 +65,10 @@ Requires Node.js 22.22 or newer (`engines` in `package.json`; CI and the image u
 npm ci
 ```
 
-**Against a running backend.** `npm run dev` starts Vite's dev server (http://localhost:5173 by default) and proxies `/api` to `VITE_BACKEND_ORIGIN`, default `http://localhost:8080`. Point it at something that serves the web API, e.g. in `.env.local`:
+**Against a running backend.** `npm run dev` starts Vite's dev server (http://localhost:5173 by default) and proxies `/api` to `VITE_BACKEND_ORIGIN`, default `http://localhost:8081`. That default works for both usual setups: the compose stack, whose frontend container on 8081 forwards `/api` to the backend, and a backend run directly, whose web listener defaults to `127.0.0.1:8081`. Anything else goes in `.env.local`:
 
 ```sh
-# the compose stack: the frontend container on 8081 forwards /api to the backend
-VITE_BACKEND_ORIGIN=http://localhost:8081
-# or a backend run directly, whose web listener defaults to 127.0.0.1:8081
+VITE_BACKEND_ORIGIN=http://backend.example.com:8081
 ```
 
 **Without a backend.** An in-browser mock API ([MSW](https://mswjs.io/), [`src/mocks/browser.ts`](src/mocks/browser.ts)) answers `/api` with made-up data:

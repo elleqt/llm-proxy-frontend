@@ -36,7 +36,9 @@ export default defineConfig(({ mode }) => {
     plugins: [prepaintPlugin(), react(), ...(env.VITE_MOCK_API === "1" ? [mockWorkerPlugin()] : [])],
     server: {
       proxy: {
-        "/api": { target: env.VITE_BACKEND_ORIGIN || "http://localhost:8080" },
+        // 8081: the backend's web listener run natively (its default address), or the
+        // compose stack's web UI, whose nginx forwards /api on. 8080 is the LLM API.
+        "/api": { target: env.VITE_BACKEND_ORIGIN || "http://localhost:8081" },
       },
     },
     test: {
