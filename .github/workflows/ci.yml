@@ -3,21 +3,27 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
 
+# Superseded pull request runs are cancelled; runs that may publish are not.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: docker.io/yoonaowo/llm-proxy-frontend
+  PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -29,18 +35,31 @@ jobs:
           npm run gen:api
           git diff --exit-code
 
+  # Pull requests: build every platform, never log in, never push.
   image:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Build the image
-        uses: docker/build-push-action@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build every platform
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
+          platforms: ${{ env.PLATFORMS }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Load the amd64 image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64
           push: false
           load: true
           tags: llm-proxy-frontend:ci
+          cache-from: type=gha
       - name: Serves the build and reports healthy
         run: |
           docker run -d --name frontend -p 127.0.0.1:8080:8080 -e BACKEND_ORIGIN=http://127.0.0.1:9 llm-proxy-frontend:ci
@@ -55,3 +74,88 @@ jobs:
       - name: Container log on failure
         if: failure()
         run: docker logs frontend || true
+
+  # Pushes to main publish `edge` and `sha-<short>`; version tags vX.Y.Z publish
+  # X.Y.Z, X.Y, X (from 1.0 on) and latest. Then every platform of the pushed
+  # manifest is started and checked.
+  publish:
+    needs: check
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    environment: dockerhub
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ env.IMAGE }}
+          # auto: `latest` only with a stable semver tag, never from a branch.
+          flavor: latest=auto
+          tags: |
+            type=edge,branch=main
+            type=sha,prefix=sha-,format=short,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+          labels: |
+            org.opencontainers.image.title=llm-proxy-frontend
+            org.opencontainers.image.description=Web interface of llm-proxy: user cabinet and admin panel, served by unprivileged nginx.
+            org.opencontainers.image.licenses=MIT
+      - id: build
+        name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Every platform starts and serves /healthz
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          for platform in ${PLATFORMS//,/ }; do
+            name="smoke-${platform//\//-}"
+            docker run -d --name "$name" --platform "$platform" -e BACKEND_ORIGIN=http://127.0.0.1:9 "$REF"
+            ok=
+            for _ in $(seq 60); do
+              if docker exec "$name" wget -qO- http://127.0.0.1:8080/healthz; then ok=1; break; fi
+              sleep 2
+            done
+            arch="$(docker exec "$name" uname -m || true)"
+            echo " $platform: machine $arch"
+            if [ -z "$ok" ]; then docker logs "$name"; exit 1; fi
+            case "$platform:$arch" in
+              linux/amd64:x86_64 | linux/arm64:aarch64) ;;
+              *) echo "$platform ran as $arch" >&2; exit 1 ;;
+            esac
+            docker rm -f "$name"
+          done
+      - name: Headers of the pushed amd64 image
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run -d --name frontend --platform linux/amd64 -p 127.0.0.1:8080:8080 -e BACKEND_ORIGIN=http://127.0.0.1:9 "$REF"
+          for _ in $(seq 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' frontend || echo gone)
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          [ "$status" = healthy ] || { docker logs frontend; exit 1; }
+          nginx/check-headers.sh http://127.0.0.1:8080
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          for c in smoke-linux-amd64 smoke-linux-arm64 frontend; do docker logs "$c" 2>&1 || true; done

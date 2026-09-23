@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS build
+# The static build is the same for every target platform, so it runs once on the
+# builder's native platform; only the nginx stage below is per target.
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
