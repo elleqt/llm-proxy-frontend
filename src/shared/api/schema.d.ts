@@ -728,9 +728,13 @@ export interface components {
         ModelPrice: {
             provider: string;
             model: string;
+            /** Format: double */
             input: number;
+            /** Format: double */
             output: number;
+            /** Format: double */
             cacheRead: number;
+            /** Format: double */
             cacheWrite: number;
         };
     };
@@ -1450,6 +1454,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderLoginSession"];
+                };
+            };
+            /** @description `login_busy` — too many vendor logins are pending; finish or abandon one and retry. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description `unsupported_provider` */

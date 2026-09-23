@@ -23,7 +23,10 @@ info:
     - Codes any endpoint may answer besides those it declares: `unsupported_media_type`
       (415, a mutating request without `Content-Type: application/json`),
       `payload_too_large` (413), `rate_limited` (429 with `Retry-After`, sign-in and
-      password endpoints only), `internal` (500).
+      password endpoints only), `internal` (500), `not_found` (404, an unknown or malformed
+      id in the path, or an `/api/admin/*` route called by a non-administrator), and
+      `invalid_input` (422, a body or query parameter that is not what the operation
+      expects, with `field` when one field is at fault).
     - Every error body is `Error`. Clients render text from `code`, never from
       `message`, so the interface stays translatable.
     - Timestamps are RFC 3339 in UTC. Ids are UUIDs unless stated otherwise.
@@ -476,6 +479,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProviderLoginSession" }
+        "409":
+          description: "`login_busy` — too many vendor logins are pending; finish or abandon one and retry."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: "`unsupported_provider`"
           content:
@@ -988,10 +996,10 @@ components:
       properties:
         provider: { type: string }
         model: { type: string }
-        input: { type: number, minimum: 0 }
-        output: { type: number, minimum: 0 }
-        cacheRead: { type: number, minimum: 0 }
-        cacheWrite: { type: number, minimum: 0 }
+        input: { type: number, format: double, minimum: 0 }
+        output: { type: number, format: double, minimum: 0 }
+        cacheRead: { type: number, format: double, minimum: 0 }
+        cacheWrite: { type: number, format: double, minimum: 0 }
 
 security:
   - session: []

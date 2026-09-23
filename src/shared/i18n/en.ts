@@ -151,6 +151,7 @@ export const en = {
 
   // Admin screens.
   "error.self_lockout": "You cannot block yourself or take away your own administrator role.",
+  "error.login_busy": "Too many vendor sign-ins are in progress. Finish or abandon one, or wait for it to expire, then try again.",
   "error.invalid_input": "This value is not accepted. Check the field and try again.",
   "error.already_linked": "This account is already linked to the identity provider: there is nothing to invite.",
   "error.not_invitable": "This account cannot be invited: it has no email address, is a service account, or sign-in through the identity provider is not set up.",

@@ -129,6 +129,28 @@ describe("add-account wizard", () => {
     expect(within(dialog).getByRole("button", { name: en["providerLogin.getLink"] })).toBeInTheDocument();
   });
 
+  it("shows login_busy in the first step, which stays usable", async () => {
+    providers([]);
+    let starts = 0;
+    server.use(
+      http.post("/api/admin/providers/login/start", ({ response }) => {
+        starts++;
+        return response(409).json({ code: "login_busy", message: "" });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: en["providerLogin.open"] }));
+    const dialog = screen.getByRole("dialog", { name: en["providerLogin.title"] });
+    await user.click(within(dialog).getByRole("button", { name: en["providerLogin.getLink"] }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.login_busy"]);
+    expect(within(dialog).queryByRole("timer")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: en["providerLogin.getLink"] }));
+    await waitFor(() => expect(starts).toBe(2));
+  });
+
   it("treats a login_expired refusal as the expiry", async () => {
     providers([]);
     server.use(
