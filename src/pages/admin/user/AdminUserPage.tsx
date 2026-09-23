@@ -507,7 +507,12 @@ function UserActivity({ userId }: { userId: string }) {
     { id: "status", header: t("admin.statusCode"), align: "end", cell: (row) => row.statusCode },
     { id: "tokens", header: t("usage.tokens"), align: "end", cell: (row) => number.format(row.tokensTotal) },
     // Null: the request could not be priced (no price for the model when it was served).
-    { id: "cost", header: t("usage.cost"), align: "end", cell: (row) => (row.costUSD == null ? "—" : formatUSD(lang, row.costUSD)) },
+    {
+      id: "cost",
+      header: t("usage.cost"),
+      align: "end",
+      cell: (row) => (row.costUSD == null ? "—" : formatUSD(lang, row.costUSD)),
+    },
     {
       id: "latency",
       header: t("admin.latency"),

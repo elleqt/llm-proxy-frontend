@@ -442,3 +442,8 @@
     white-space: normal;
   }
 }
+
+/* A long badge (an invitation with its date) wraps inside its cell rather than widening the table. */
+.policy > span {
+  white-space: normal;
+}

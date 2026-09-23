@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { en } from "../../../shared/i18n/en";
 import { ru } from "../../../shared/i18n/ru";
+import { shortDateTime } from "../../../shared/lib/dates";
 import { quotaReset } from "./quotaReset";
 
 const NOW = Date.parse("2026-09-23T10:00:00Z");
@@ -29,5 +30,10 @@ describe("quota reset", () => {
   it("says a reset that has passed happened", () => {
     expect(inEn("2026-09-23T09:59:00Z")).toBe("reset");
     expect(inRu("2026-09-23T10:00:00Z")).toBe("сброшено");
+  });
+
+  it("dates a token refresh the same short way", () => {
+    expect(shortDateTime(Date.parse("2026-09-22T10:00:00Z"), NOW, "ru")).toMatch(/^22 сент\., \d\d:\d\d$/);
+    expect(shortDateTime(Date.parse("2025-12-01T10:00:00Z"), NOW, "en")).toMatch(/2025/);
   });
 });

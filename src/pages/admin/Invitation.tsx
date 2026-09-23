@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminUserQuery, adminUsersQuery, type AdminUser } from "../../entities/user/adminUsers";
 import { client, unwrap } from "../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
+import { shortDateTime } from "../../shared/lib/dates";
 import { fill } from "../../shared/lib/template";
 import { Badge, Button } from "../../shared/ui";
 import styles from "./admin.module.css";
@@ -11,7 +12,7 @@ export function InvitationState({ expiresAt }: { expiresAt: string }) {
   const t = useT();
   const [lang] = useLang();
   if (Date.parse(expiresAt) <= Date.now()) return <Badge tone="muted">{t("admin.invitationLapsed")}</Badge>;
-  const until = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date(expiresAt));
+  const until = shortDateTime(Date.parse(expiresAt), Date.now(), lang);
   return <Badge tone="neutral">{fill(t("admin.invitationPending"), { time: until })}</Badge>;
 }
 

@@ -1,4 +1,5 @@
 import type { MessageKey } from "../../../shared/i18n";
+import { shortDateTime } from "../../../shared/lib/dates";
 import { fill } from "../../../shared/lib/template";
 
 const MINUTE = 60_000;
@@ -23,13 +24,6 @@ export function quotaReset(resetAt: string, now: number, lang: string, t: (key: 
     ];
     return fill(t("providers.resetsIn"), { duration: parts.filter(Boolean).join(" ") });
   }
-  const sameYear = new Date(at).getFullYear() === new Date(now).getFullYear();
-  const date = new Intl.DateTimeFormat(lang, {
-    day: "numeric",
-    month: "short",
-    ...(sameYear ? {} : { year: "numeric" }),
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(at));
+  const date = shortDateTime(at, now, lang);
   return fill(t("providers.resets"), { time: date });
 }

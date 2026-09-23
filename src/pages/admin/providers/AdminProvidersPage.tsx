@@ -8,6 +8,7 @@ import { fill } from "../../../shared/lib/template";
 import { Badge, Button, EmptyState, Spinner, Table, type Column } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
 import styles from "../admin.module.css";
+import { shortDateTime } from "../../../shared/lib/dates";
 import { quotaReset } from "./quotaReset";
 
 export function AdminProvidersPage() {
@@ -83,7 +84,9 @@ export function AdminProvidersPage() {
           {a.lastRefreshedAt == null ? (
             <span className={styles.never}>{t("providers.never")}</span>
           ) : (
-            dateTime.format(new Date(a.lastRefreshedAt))
+            <span title={dateTime.format(new Date(a.lastRefreshedAt))}>
+              {shortDateTime(Date.parse(a.lastRefreshedAt), now, lang)}
+            </span>
           )}
         </>
       ),

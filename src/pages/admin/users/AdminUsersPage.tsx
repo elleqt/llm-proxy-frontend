@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { adminUsersQuery, type AdminUser } from "../../../entities/user/adminUsers";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
+import { shortDateTime } from "../../../shared/lib/dates";
 import { fill } from "../../../shared/lib/template";
 import { Badge, EmptyState, Select, Spinner, Table, TextField, type Column } from "../../../shared/ui";
 import styles from "../admin.module.css";
@@ -118,7 +119,9 @@ export function AdminUsersPage() {
         user.lastSeenAt == null ? (
           <span className={styles.never}>{t("admin.neverSeen")}</span>
         ) : (
-          dateTime.format(new Date(user.lastSeenAt))
+          <span title={dateTime.format(new Date(user.lastSeenAt))}>
+            {shortDateTime(Date.parse(user.lastSeenAt), Date.now(), lang)}
+          </span>
         ),
     },
   ];
