@@ -1,6 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { meQuery } from "../entities/user/me";
-import { endSession } from "../features/session/session";
+import { endSession, listenForSessionChanges, resetSession } from "../features/session/session";
 import { ApiError, PasswordChangeRequiredError, UnauthenticatedError } from "../shared/api/client";
 
 /**
@@ -32,5 +32,22 @@ export function createQueryClient(navigate: (to: "/login" | "/password") => void
       },
     },
   });
+
+  // `me` answering as someone else (another tab signed in as another user and
+  // this one refetched, e.g. on focus) means nothing cached here is theirs.
+  let signedIn: string | undefined;
+  queryClient.getQueryCache().subscribe((event) => {
+    if (event.query.queryKey[0] !== meQuery.queryKey[0]) return;
+    if (event.type === "removed") {
+      signedIn = undefined;
+    } else if (event.type === "updated" && event.action.type === "success") {
+      const id = (event.action.data as { id: string } | undefined)?.id;
+      const changed = signedIn !== undefined && id !== signedIn;
+      signedIn = id;
+      // Deferred: the cache is mid-notification here.
+      if (changed) queueMicrotask(() => resetSession(queryClient, { keepMe: true }));
+    }
+  });
+  listenForSessionChanges(queryClient);
   return queryClient;
 }

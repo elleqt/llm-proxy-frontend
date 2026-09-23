@@ -4,6 +4,8 @@ import { HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { en } from "../../shared/i18n/en";
 import { handOffFreshToken, takeFreshToken } from "../../entities/token/tokens";
+import { createQueryClient } from "../../app/queryClient";
+import { startSession } from "../../features/session/session";
 import { renderApp } from "../../test/render";
 import { errorResponse, fixtures, http, server, type Schemas } from "../../test/server";
 
@@ -97,6 +99,23 @@ describe("/login", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: en["page.password.title"] })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/password");
+  });
+
+  it("keeps a refused password nowhere: not in the field, not in the mutation cache", async () => {
+    authConfig(both);
+    server.use(
+      http.post("/api/auth/login", ({ response }) =>
+        response(401).json({ code: "invalid_credentials", message: "invalid credentials" }),
+      ),
+    );
+    const { queryClient } = renderApp("/login");
+
+    await submitCredentials("ada@example.com", "hunter2-typed-wrong");
+
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText(en["login.password"])).toHaveValue("");
+    const mutations = queryClient.getMutationCache().getAll().map((mutation) => mutation.state);
+    expect(JSON.stringify(mutations)).not.toContain("hunter2-typed-wrong");
   });
 
   it("shows invalid_credentials in place and stays on /login", async () => {
@@ -246,4 +265,63 @@ describe("session boundaries", () => {
     await signInAsBobSeeingOnlyBob();
     expect(takeFreshToken()).toBeNull();
   });
+
+  it("a `me` that comes back as someone else drops the previous user's data in place", async () => {
+    const { queryClient } = await adaInHerCabinet();
+    const releaseBob = bobSignedInOnTheServer();
+
+    // What a refetch on focus does after another tab signed in as Bob.
+    await queryClient.refetchQueries({ queryKey: ["me"] });
+
+    await waitFor(() => expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument());
+    releaseBob();
+    expect(await screen.findByText("bob-desktop")).toBeInTheDocument();
+  });
+
+  it("another tab signing in drops this tab's data", async () => {
+    await adaInHerCabinet();
+    const releaseBob = bobSignedInOnTheServer();
+    const otherTab = createQueryClient(() => undefined);
+
+    startSession(otherTab, bob);
+
+    await waitFor(() => expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument());
+    releaseBob();
+    expect(await screen.findByText("bob-desktop")).toBeInTheDocument();
+  });
+
+  it("another tab signing out sends this tab to /login", async () => {
+    server.use(http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })));
+    const { router } = await adaInHerCabinet();
+    const otherTab = renderApp("/");
+    const otherNav = await within(otherTab.container).findByRole("navigation", { name: en["nav.label"] });
+    server.use(
+      http.get("/api/me", ({ response }) =>
+        response.untyped(errorResponse(401, { code: "unauthenticated", message: "" })),
+      ),
+    );
+
+    await userEvent.click(within(otherNav).getByRole("button", { name: en["session.signOut"] }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(screen.queryByText("ada-laptop")).not.toBeInTheDocument();
+  });
 });
+
+const bob = fixtures.me({ id: "00000000-0000-4000-8000-000000000002", displayName: "Bob", email: "bob@example.com" });
+
+/** The server now answers for Bob; his key list waits for the returned release. */
+function bobSignedInOnTheServer(): () => void {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.get("/api/me", ({ response }) => response(200).json(bob)),
+    http.get("/api/me/tokens", async ({ response }) => {
+      await held;
+      return response(200).json([fixtures.token({ id: "00000000-0000-4000-8000-0000000000b1", label: "bob-desktop" })]);
+    }),
+  );
+  return release;
+}

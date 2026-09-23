@@ -87,8 +87,12 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Reads the form's state rather than taking it as variables, so the password
+  // is never stored with the mutation; gcTime 0 drops the mutation itself.
   const login = useMutation({
-    mutationFn: signIn,
+    mutationFn: () => signIn({ email: email.trim(), password }),
+    gcTime: 0,
+    onError: () => setPassword(""),
     onSuccess: (me) => {
       startSession(queryClient, me);
       void navigate(me.restricted ? "/password" : "/", { replace: true });
@@ -97,7 +101,7 @@ function LoginForm() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    login.mutate({ email: email.trim(), password });
+    login.mutate();
   };
 
   let failure: string | null = null;
