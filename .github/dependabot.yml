@@ -32,6 +32,12 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # Node's major versions are adopted by hand, one LTS line at a time, with
+      # engines in package.json and the CI node-version: Dependabot cannot tell
+      # an LTS release from a current one.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: build
       include: scope
