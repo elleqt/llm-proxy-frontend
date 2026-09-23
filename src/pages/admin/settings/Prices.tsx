@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type RefObject } from "react";
 import {
   pricesQuery,
   type ModelPrice,
@@ -130,6 +130,12 @@ function RefreshCatalog({ catalog }: { catalog: PriceCatalog }) {
   const refresh = useMutation({
     mutationFn: () => unwrap(client.POST("/api/admin/prices/refresh")),
     onSuccess: (list) => queryClient.setQueryData(pricesQuery.queryKey, list),
+    // The catalog was turned off since this view loaded: reload to show that.
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "catalog_disabled") {
+        void queryClient.invalidateQueries({ queryKey: pricesQuery.queryKey });
+      }
+    },
   });
   return (
     <>
@@ -147,6 +153,8 @@ function RefreshCatalog({ catalog }: { catalog: PriceCatalog }) {
 
 function PriceTable({ list }: { list: PriceList }) {
   const t = useT();
+  // Where focus goes once a reset or deleted row's buttons are gone.
+  const listRef = useRef<HTMLDivElement>(null);
   const [lang] = useLang();
   const [filter, setFilter] = useState("");
   const number = new Intl.NumberFormat(lang, { useGrouping: false, maximumFractionDigits: 20 });
@@ -199,7 +207,7 @@ function PriceTable({ list }: { list: PriceList }) {
       cell: (price) => (
         <div className={styles.rowActions}>
           <PriceEditor list={list} price={price} />
-          {price.source === "manual" && <RemoveOverride list={list} price={price} />}
+          {price.source === "manual" && <RemoveOverride list={list} price={price} returnFocus={listRef} />}
         </div>
       ),
     },
@@ -221,7 +229,7 @@ function PriceTable({ list }: { list: PriceList }) {
       ) : shown.length === 0 ? (
         <EmptyState title={t("prices.noMatches")} />
       ) : (
-        <div className={styles.priceTable}>
+        <div ref={listRef} tabIndex={-1} className={styles.priceTable}>
           <Table label={t("prices.title")} columns={columns} rows={shown} rowKey={rowName} />
         </div>
       )}
@@ -376,7 +384,15 @@ function PriceDialog({
 }
 
 /** A manual row's way out: back to the catalog price, or deleted when the catalog has none. */
-function RemoveOverride({ list, price }: { list: PriceList; price: PriceEntry }) {
+function RemoveOverride({
+  list,
+  price,
+  returnFocus,
+}: {
+  list: PriceList;
+  price: PriceEntry;
+  returnFocus: RefObject<HTMLElement | null>;
+}) {
   const t = useT();
   const [lang] = useLang();
   const errorMessage = useErrorMessage();
@@ -409,9 +425,18 @@ function RemoveOverride({ list, price }: { list: PriceList; price: PriceEntry })
           onConfirm={() =>
             remove.mutate(
               manualPrices(list).filter((other) => rowName(other) !== row),
-              { onSuccess: () => setOpen(false) },
+              {
+                // Usually the row stops being manual and this button goes, dialog and all,
+                // so focus falls back to the list. Close by hand only if the row is still here:
+                // closing first would hand focus to a button about to disappear.
+                onSuccess: (updated) => {
+                  if (updated.prices.some((other) => rowName(other) === row && other.source === "manual"))
+                    setOpen(false);
+                },
+              },
             )
           }
+          returnFocus={returnFocus}
           onClose={() => {
             setOpen(false);
             remove.reset();

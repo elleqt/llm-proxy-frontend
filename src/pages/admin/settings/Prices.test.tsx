@@ -12,7 +12,7 @@ const CATALOG: Schemas["PriceCatalog"] = {
   checkedAt: "2026-09-23T08:00:00Z",
   changedAt: "2026-09-20T08:00:00Z",
   models: 2,
-  lastError: null,
+  // No lastError: the backend omits absent fields rather than sending null.
 };
 
 /** Catalog rows for gpt-6 and claude-sonnet-5; the latter overridden by hand; plus a manual-only row. */
@@ -55,8 +55,11 @@ const LIST: Schemas["PriceList"] = {
 const SONNET = { provider: "claude", model: "claude-sonnet-5", input: 2, output: 12, cacheRead: 0.2, cacheWrite: 3 };
 const LLAMA = { provider: "local", model: "llama-4-70b", input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-/** An administrator on /admin/settings; every PUT of the override list is recorded and answered with `LIST`. */
-function pricesScreen(list: Schemas["PriceList"] = LIST) {
+/**
+ * An administrator on /admin/settings; every PUT of the override list is
+ * recorded and answered with `answer` (the unchanged list by default).
+ */
+function pricesScreen(list: Schemas["PriceList"] = LIST, answer: Schemas["PriceList"] = list) {
   const puts: Schemas["ModelPrice"][][] = [];
   server.use(
     http.get("/api/me", ({ response }) => response(200).json(fixtures.me({ role: "admin" }))),
@@ -66,13 +69,14 @@ function pricesScreen(list: Schemas["PriceList"] = LIST) {
     http.get("/api/admin/prices", ({ response }) => response(200).json(list)),
     http.put("/api/admin/prices", async ({ request, response }) => {
       puts.push(await request.json());
-      return response(200).json(list);
+      return response(200).json(answer);
     }),
   );
   return { puts };
 }
 
 const row = async (name: string) => (await screen.findByRole("cell", { name })).closest("tr") as HTMLElement;
+const row_ = (name: string) => screen.getByRole("cell", { name }).closest("tr") as HTMLElement;
 
 describe("price list", () => {
   it("shows which rows are manual overrides, with the catalog's rates beside theirs", async () => {
@@ -107,19 +111,46 @@ describe("price list", () => {
     renderApp("/admin/settings");
     await row("chatgpt:gpt-6");
 
-    await user.type(screen.getByRole("searchbox", { name: en["prices.filter"] }), "CLAUDE");
+    const filter = screen.getByRole("searchbox", { name: en["prices.filter"] });
+    // A model fragment…
+    await user.type(filter, "SONNET");
     expect(screen.getByRole("cell", { name: "claude:claude-sonnet-5" })).toBeInTheDocument();
     expect(screen.queryByRole("cell", { name: "chatgpt:gpt-6" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "local:llama-4-70b" })).not.toBeInTheDocument();
+    // …and a provider that appears in no model name.
+    await user.clear(filter);
+    await user.type(filter, "local");
+    expect(screen.getByRole("cell", { name: "local:llama-4-70b" })).toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "claude:claude-sonnet-5" })).not.toBeInTheDocument();
 
     await user.clear(screen.getByRole("searchbox", { name: en["prices.filter"] }));
     await user.type(screen.getByRole("searchbox", { name: en["prices.filter"] }), "nothing-like-this");
     expect(screen.getByText(en["prices.noMatches"])).toBeInTheDocument();
   });
 
-  it("resets an override to the catalog by sending the override list without it", async () => {
-    const { puts } = pricesScreen();
+  it("resets an override to the catalog by sending the override list without it, filtered-out ones included", async () => {
+    const reset: Schemas["PriceList"] = {
+      ...LIST,
+      prices: LIST.prices.map((price) =>
+        price.model === "claude-sonnet-5"
+          ? {
+              provider: price.provider,
+              model: price.model,
+              input: 3,
+              output: 15,
+              cacheRead: 0.3,
+              cacheWrite: 3.75,
+              source: "catalog" as const,
+              updatedAt: price.updatedAt,
+            }
+          : price,
+      ),
+    };
+    const { puts } = pricesScreen(LIST, reset);
     const user = userEvent.setup();
     renderApp("/admin/settings");
+    // The filter hides the other override, which must still be sent.
+    await user.type(await screen.findByRole("searchbox", { name: en["prices.filter"] }), "sonnet");
 
     await user.click(
       within(await row("claude:claude-sonnet-5")).getByRole("button", {
@@ -133,6 +164,11 @@ describe("price list", () => {
     await user.click(within(dialog).getByRole("button", { name: en["prices.resetConfirm"] }));
 
     await waitFor(() => expect(puts).toEqual([[LLAMA]]));
+    // The row is a catalog row now, its buttons gone: focus returns to the list, not to the page.
+    await waitFor(() =>
+      expect(within(row_("claude:claude-sonnet-5")).getByText(en["prices.source.catalog"])).toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(screen.getByRole("table").closest("[tabindex='-1']"));
   });
 
   it("deletes a manual price the catalog lacks", async () => {
@@ -149,8 +185,21 @@ describe("price list", () => {
     await waitFor(() => expect(puts).toEqual([[SONNET]]));
   });
 
-  it("saves an edited catalog row as an override, with every other override kept", async () => {
-    const { puts } = pricesScreen();
+  it("saves an edited catalog row as an override, with every other override kept, and shows the answer", async () => {
+    const saved: Schemas["PriceList"] = {
+      ...LIST,
+      prices: LIST.prices.map((price) =>
+        price.model === "gpt-6"
+          ? {
+              ...price,
+              output: 8.5,
+              source: "manual",
+              catalogRates: { input: 2.5, output: 10, cacheRead: 0.25, cacheWrite: 0 },
+            }
+          : price,
+      ),
+    };
+    const { puts } = pricesScreen(LIST, saved);
     const user = userEvent.setup();
     renderApp("/admin/settings");
 
@@ -175,28 +224,38 @@ describe("price list", () => {
       ]),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const gpt = row_("chatgpt:gpt-6");
+    expect(gpt).toHaveTextContent(en["prices.source.manual"]);
+    expect(
+      within(gpt).getByRole("cell", {
+        name: `${en["prices.output"]}8.5${fill(en["prices.catalogValue"], { value: 10 })}`,
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("places a refusal naming the edited rate on that field", async () => {
+  it.each([
+    ["a catalog row", "chatgpt:gpt-6", "[2].input"],
+    ["a manual row", "claude:claude-sonnet-5", "[1].input"],
+  ])("places a refusal naming the edited rate of %s on that field", async (_, name, field) => {
     pricesScreen();
     server.use(
       http.put("/api/admin/prices", ({ response }) =>
-        response(422).json({ code: "invalid_input", message: "", field: "[2].input" }),
+        response(422).json({ code: "invalid_input", message: "", field }),
       ),
     );
     const user = userEvent.setup();
     renderApp("/admin/settings");
 
     await user.click(
-      within(await row("chatgpt:gpt-6")).getByRole("button", {
-        name: fill(en["prices.editLabel"], { row: "chatgpt:gpt-6" }),
-      }),
+      within(await row(name)).getByRole("button", { name: fill(en["prices.editLabel"], { row: name }) }),
     );
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: en["prices.save"] }));
 
     await waitFor(() =>
-      expect(within(dialog).getByLabelText(en["prices.input"])).toHaveAccessibleDescription(en["error.invalid_input"]),
+      expect(within(dialog).getByLabelText(en["prices.input"])).toHaveAccessibleDescription(
+        expect.stringContaining(en["error.invalid_input"]),
+      ),
     );
   });
 
@@ -242,7 +301,7 @@ describe("price catalog", () => {
     pricesScreen({ ...LIST, catalog: { ...CATALOG, lastError: "GET https://catalog.example.com/x.json: 503" } });
     renderApp("/admin/settings");
 
-    expect(await screen.findByText(/^Catalog: checked .*, 2 models\./)).toBeInTheDocument();
+    expect(await screen.findByText(/^Catalog: checked .*; models: 2\./)).toBeInTheDocument();
     expect(
       screen.getByText(fill(en["prices.catalogError"], { error: "GET https://catalog.example.com/x.json: 503" })),
     ).toBeInTheDocument();
@@ -254,34 +313,49 @@ describe("price catalog", () => {
     server.use(
       http.post("/api/admin/prices/refresh", ({ response }) => {
         refreshes++;
-        return response(200).json({ ...LIST, catalog: { ...CATALOG, models: 41, lastError: null } });
+        return response(200).json({ ...LIST, catalog: { ...CATALOG, models: 41 } });
       }),
     );
     const user = userEvent.setup();
     renderApp("/admin/settings");
 
     await user.click(await screen.findByRole("button", { name: en["prices.refresh"] }));
-    expect(await screen.findByText(/41 models/)).toBeInTheDocument();
+    expect(await screen.findByText(/models: 41\./)).toBeInTheDocument();
     expect(screen.queryByText(fill(en["prices.catalogError"], { error: "timeout" }))).not.toBeInTheDocument();
     expect(refreshes).toBe(1);
   });
 
-  it("shows catalog_disabled from a refresh in place", async () => {
+  it("shows catalog_disabled from a refresh in place, and reloads to show the catalog off", async () => {
+    let list = LIST;
     pricesScreen();
     server.use(
-      http.post("/api/admin/prices/refresh", ({ response }) =>
-        response.untyped(errorResponse(409, { code: "catalog_disabled", message: "" })),
-      ),
+      http.get("/api/admin/prices", ({ response }) => response(200).json(list)),
+      http.post("/api/admin/prices/refresh", ({ response }) => {
+        // The gateway was restarted without a catalog since the page loaded.
+        list = { ...LIST, catalog: { enabled: false, models: 0 } };
+        return response.untyped(errorResponse(409, { code: "catalog_disabled", message: "" }));
+      }),
     );
     const user = userEvent.setup();
     renderApp("/admin/settings");
 
-    await user.click(await screen.findByRole("button", { name: en["prices.refresh"] }));
+    const refresh = await screen.findByRole("button", { name: en["prices.refresh"] });
+    await user.click(refresh);
     expect(await screen.findByRole("alert")).toHaveTextContent(en["error.catalog_disabled"]);
+    expect(await screen.findByText(en["prices.catalogOff"])).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en["prices.refresh"] })).toBeDisabled();
+  });
+
+  it("says a catalog that was never checked is not checked yet, with no failure", async () => {
+    pricesScreen({ ...LIST, catalog: { enabled: true, models: 0 } });
+    renderApp("/admin/settings");
+
+    expect(await screen.findByText(fill(en["prices.catalogNeverChecked"], { count: 0 }))).toBeInTheDocument();
+    expect(screen.queryByText(/The last check failed/)).not.toBeInTheDocument();
   });
 
   it("says automatic updates are off, with nothing to refresh", async () => {
-    pricesScreen({ ...LIST, catalog: { ...CATALOG, enabled: false, checkedAt: null, changedAt: null } });
+    pricesScreen({ ...LIST, catalog: { enabled: false, models: 0 } });
     renderApp("/admin/settings");
 
     expect(await screen.findByText(en["prices.catalogOff"])).toBeInTheDocument();

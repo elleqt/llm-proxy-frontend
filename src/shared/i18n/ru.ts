@@ -365,7 +365,7 @@ export const ru: Messages = {
   "prices.rateInvalid": "Число от 0, например 2,5.",
   "prices.save": "Сохранить цену",
   "prices.reset": "Сбросить к каталогу",
-  "prices.resetLabel": "Сбросить цену {row} к каталожной",
+  "prices.resetLabel": "Сбросить к каталогу: {row}",
   "prices.resetTitle": "Сбросить цену {row} к каталожной?",
   "prices.resetBody": "Ручная цена удаляется, действует каталожная: {rates}.",
   "prices.resetConfirm": "Сбросить к каталогу",
