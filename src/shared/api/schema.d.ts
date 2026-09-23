@@ -523,7 +523,7 @@ export interface components {
             /** @enum {string} */
             bucket: "hour" | "day";
             totals: {
-                /** @description Served requests. An attempt the gateway retried on another account is not counted twice; failed attempts are not counted. */
+                /** @description Served model calls. Failed attempts, including ones the gateway retried on another account, are not counted. A request that also made a side call to another model (for example an image model behind a chat request) counts once per model served. */
                 requests: number;
                 /** @description Every token spent, including tokens of failed or retried attempts. */
                 tokensTotal: number;
