@@ -806,6 +806,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `not_found` — local sign-in is turned off (`AuthConfig.localLogin` is false); the route answers as an unknown one. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `locked_out` — too many failed attempts for this address; `rate_limited` — too many attempts from this client. Both carry `Retry-After`. */
             429: {
                 headers: {
@@ -984,6 +993,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssuedToken"];
+                };
+            };
+            /** @description `token_limit` — the account already holds 50 tokens that are not revoked; revoke one first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description `invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters. */
@@ -1303,6 +1321,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssuedToken"];
+                };
+            };
+            /** @description `token_limit` — the account already holds 50 tokens that are not revoked; revoke one first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description `invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters. */

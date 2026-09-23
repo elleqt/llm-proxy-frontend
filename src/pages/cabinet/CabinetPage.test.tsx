@@ -186,6 +186,24 @@ describe("a label the server refuses", () => {
   });
 });
 
+describe("the key limit", () => {
+  it("is explained in the issue dialog, which stays open", async () => {
+    cabinet([]);
+    server.use(
+      http.post("/api/me/tokens", ({ response }) => response(409).json({ code: "token_limit", message: "" })),
+    );
+    renderApp("/");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: en["issue.open"] }));
+    await user.type(screen.getByLabelText(en["issue.label"]), "one too many");
+    await user.click(screen.getByRole("button", { name: en["issue.submit"] }));
+
+    const dialog = screen.getByRole("dialog", { name: en["issue.open"] });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.token_limit"]);
+  });
+});
+
 describe("revoking a key", () => {
   it("names the key in the confirmation and revokes only on confirm", async () => {
     const laptop = fixtures.token({ label: "laptop" });

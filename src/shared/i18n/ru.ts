@@ -39,6 +39,7 @@ export const ru: Messages = {
   "error.weak_password": "Пароль слишком простой.",
   "error.empty_password": "Введите пароль.",
   "error.not_found": "Не найдено.",
+  "error.token_limit": "Достигнут предел в 50 действующих ключей. Сначала отзовите один из ключей.",
   "error.email_taken": "Учётная запись с этой почтой уже существует.",
   "error.policy_managed_by_idp": "Эта политика приходит от провайдера учётных записей и здесь не редактируется.",
   "error.invalid_rule": "Правило некорректно.",
@@ -78,6 +79,7 @@ export const ru: Messages = {
   "login.oidcGeneric": "Войти через провайдера учётных записей",
   "login.or": "или",
   "login.unavailable": "Вход недоступен. Обратитесь к администратору.",
+  "login.localDisabled": "Вход по паролю здесь отключён.",
   "login.lockedOutUntil": "Слишком много неудачных попыток. Повторите после {time}.",
   "login.rateLimitedUntil": "Слишком много попыток с этого устройства. Повторите после {time}.",
 

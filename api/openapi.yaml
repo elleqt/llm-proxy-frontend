@@ -81,6 +81,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: "`not_found` — local sign-in is turned off (`AuthConfig.localLogin` is false); the route answers as an unknown one."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "429":
           description: "`locked_out` — too many failed attempts for this address; `rate_limited` — too many attempts from this client. Both carry `Retry-After`."
           headers:
@@ -190,6 +195,11 @@ paths:
               schema: { $ref: "#/components/schemas/IssuedToken" }
         "422":
           description: "`invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`token_limit` — the account already holds 50 tokens that are not revoked; revoke one first."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -384,6 +394,11 @@ paths:
               schema: { $ref: "#/components/schemas/IssuedToken" }
         "422":
           description: "`invalid_input` with `field: label` — empty, longer than 64 characters, or with control characters."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`token_limit` — the account already holds 50 tokens that are not revoked; revoke one first."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

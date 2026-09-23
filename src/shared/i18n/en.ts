@@ -39,6 +39,7 @@ export const en = {
   "error.weak_password": "The password is too weak.",
   "error.empty_password": "Enter a password.",
   "error.not_found": "Not found.",
+  "error.token_limit": "The limit of 50 active keys is reached. Revoke a key first.",
   "error.email_taken": "An account with this email already exists.",
   "error.policy_managed_by_idp": "This policy comes from the identity provider and cannot be edited here.",
   "error.invalid_rule": "This rule is not valid.",
@@ -78,6 +79,7 @@ export const en = {
   "login.oidcGeneric": "Sign in with your identity provider",
   "login.or": "or",
   "login.unavailable": "Sign-in is not available. Contact your administrator.",
+  "login.localDisabled": "Sign-in with a password is turned off here.",
   "login.lockedOutUntil": "Too many failed attempts. Try again after {time}.",
   "login.rateLimitedUntil": "Too many attempts from this device. Try again after {time}.",
 

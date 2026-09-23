@@ -110,6 +110,9 @@ function LoginForm() {
     const retryAt = new Date(Math.ceil(login.error.retryAt.getTime() / 60_000) * 60_000);
     const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(retryAt);
     failure = fill(t(RETRY_LATER[login.error.code as RetryLaterCode]), { time });
+  } else if (login.error instanceof ApiError && login.error.code === "not_found") {
+    // The form was offered, but local sign-in has been turned off since.
+    failure = t("login.localDisabled");
   } else if (login.isError) {
     failure = errorMessage(login.error);
   }

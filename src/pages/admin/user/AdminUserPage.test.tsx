@@ -304,6 +304,24 @@ describe("service account", () => {
     expect(cached(queryClient)).not.toContain(SECRET);
   });
 
+  it("explains the key limit in the issue dialog", async () => {
+    card({ user: service, tokens: [] });
+    server.use(
+      http.post("/api/admin/users/{userId}/tokens", ({ response }) =>
+        response(409).json({ code: "token_limit", message: "" }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+
+    await user.click(await screen.findByRole("button", { name: en["admin.issueToken"] }));
+    await user.type(screen.getByLabelText(en["issue.label"]), "one too many");
+    await user.click(screen.getByRole("button", { name: en["issue.submit"] }));
+
+    const dialog = screen.getByRole("dialog", { name: fill(en["admin.issueTitle"], { name: "nightly-report" }) });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.token_limit"]);
+  });
+
   it("revokes a key only once its label is typed", async () => {
     card({ user: service, tokens: [fixtures.token({ label: "exporter" })] });
     let revoked = 0;

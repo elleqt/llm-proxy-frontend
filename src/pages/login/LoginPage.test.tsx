@@ -101,6 +101,21 @@ describe("/login", () => {
     expect(router.state.location.pathname).toBe("/password");
   });
 
+  it("says local sign-in is off when the server answers 404, and stays on /login", async () => {
+    authConfig(both);
+    server.use(
+      http.post("/api/auth/login", ({ response }) =>
+        response.untyped(errorResponse(404, { code: "not_found", message: "" })),
+      ),
+    );
+    const { router } = renderApp("/login");
+
+    await submitCredentials();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(en["login.localDisabled"]);
+    expect(router.state.location.pathname).toBe("/login");
+  });
+
   it("keeps a refused password nowhere: not in the field, not in the mutation cache", async () => {
     authConfig(both);
     server.use(
