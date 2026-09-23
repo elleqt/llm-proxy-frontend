@@ -8,12 +8,13 @@ import styles from "./Layout.module.css";
 
 export function Layout() {
   const t = useT();
-  // Admin tables may use the full width; everything else keeps the reading
-  // column. The header stays in the column, the switches at its right as on
-  // the instruction page.
+  // Admin tables get a wider column than the reading column everything else
+  // keeps, but still a bounded, centred one, so the admin reads like the rest
+  // of the site on a large screen. The header stays in the column, the switches
+  // at its right as on the instruction page.
   const wide = useMatch("/admin/*") !== null;
   return (
-    <div className={wide ? undefined : styles.column}>
+    <div className={wide ? `${styles.column} ${styles.wide}` : styles.column}>
       <header className={styles.header}>
         <div className={styles.site}>
           <Link to="/" className={styles.brand}>

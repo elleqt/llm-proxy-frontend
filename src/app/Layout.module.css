@@ -3,6 +3,11 @@
   margin: 0 auto;
 }
 
+/* Admin: room for its tables, still a centred column rather than the whole window. */
+.wide {
+  max-width: 80rem;
+}
+
 .header {
   display: flex;
   flex-wrap: wrap;
@@ -14,10 +19,11 @@
 /*
  * Brand, navigation and switches need more than the 52rem reading column in
  * Russian and for an administrator; where the window has room the header
- * reaches past the column on both sides and stays on one row.
+ * reaches past the column on both sides and stays on one row. The admin
+ * column is wide enough already.
  */
 @media (min-width: 68.75rem) {
-  .column > .header {
+  .column:not(.wide) > .header {
     margin-inline: -7rem;
   }
 }
