@@ -130,7 +130,19 @@ describe("keys and activity", () => {
             stream: true,
             statusCode: 429,
             tokensTotal: 1234,
+            costUSD: 0.0012,
             latencyMs: 850,
+          },
+          {
+            at: "2026-09-23T07:00:00Z",
+            tokenId: null,
+            provider: "chatgpt",
+            model: "gpt-6",
+            stream: false,
+            statusCode: 200,
+            tokensTotal: 500,
+            costUSD: null,
+            latencyMs: 300,
           },
         ],
         audit: [
@@ -154,6 +166,11 @@ describe("keys and activity", () => {
     expect(request).toHaveTextContent("429");
     expect(request).toHaveTextContent("1,234");
     expect(request).toHaveTextContent(fill(en["admin.ms"], { ms: 850 }));
+    // Cost: an estimate, or a dash when the request could not be priced.
+    const costCell = (row: HTMLElement) => within(row).getAllByRole("cell")[4];
+    expect(costCell(request)).toHaveTextContent(/^\$0\.0012$/);
+    const unpriced = screen.getByRole("cell", { name: "chatgpt:gpt-6" }).closest("tr") as HTMLElement;
+    expect(costCell(unpriced)).toHaveTextContent(/^—$/);
     const audit = screen.getByRole("cell", { name: "token.revoke" }).closest("tr") as HTMLElement;
     expect(audit).toHaveTextContent("old-laptop");
     // An account id reads as that account's name, linked to its card; an unknown one as a short id.

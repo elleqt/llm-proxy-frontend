@@ -1,22 +1,28 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import type uPlot from "uplot";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handOffFreshToken } from "../../entities/token/tokens";
 import { en } from "../../shared/i18n/en";
+import { fill } from "../../shared/lib/template";
 import { renderApp } from "../../test/render";
 import { fixtures, http, server, type Schemas } from "../../test/server";
 
-// jsdom has no canvas: a stand-in uPlot records what the chart is asked to draw.
+// jsdom has no canvas: a stand-in uPlot records what the chart is asked to
+// draw — its options, and the data it was built with or last given.
 const plots = vi.hoisted(() => [] as { opts: uPlot.Options; data: uPlot.AlignedData }[]);
 vi.mock("uplot", () => ({
   default: class {
+    readonly record: { opts: uPlot.Options; data: uPlot.AlignedData };
     constructor(opts: uPlot.Options, data: uPlot.AlignedData) {
-      plots.push({ opts, data });
+      this.record = { opts, data };
+      plots.push(this.record);
     }
-    setData() {}
+    setData(data: uPlot.AlignedData) {
+      this.record.data = data;
+    }
     setSize() {}
     destroy() {}
   },
@@ -267,11 +273,11 @@ describe("usage", () => {
     const usage = fixtures.usage({
       from: "2026-09-23T07:00:00Z",
       to: "2026-09-23T10:00:00Z",
-      totals: { requests: 5, tokensTotal: 1234 },
+      totals: { ...fixtures.usage().totals, requests: 5, tokensTotal: 1234 },
       points: [
-        { at: "2026-09-23T07:00:00Z", model: "claude-sonnet-5", requests: 1, tokensTotal: 100 },
-        { at: "2026-09-23T09:00:00Z", model: "claude-sonnet-5", requests: 2, tokensTotal: 900 },
-        { at: "2026-09-23T08:00:00Z", model: "gpt-6", requests: 2, tokensTotal: 234 },
+        { at: "2026-09-23T07:00:00Z", model: "claude-sonnet-5", requests: 1, tokensTotal: 100, costUSD: 0.01 },
+        { at: "2026-09-23T09:00:00Z", model: "claude-sonnet-5", requests: 2, tokensTotal: 900, costUSD: 0.09 },
+        { at: "2026-09-23T08:00:00Z", model: "gpt-6", requests: 2, tokensTotal: 234, costUSD: 0.0012 },
       ],
     });
     cabinet([], usage);
@@ -304,5 +310,83 @@ describe("usage", () => {
     await waitFor(() => expect(periods).toEqual([24, 168]));
     expect(screen.getByRole("button", { name: en["usage.period.7d"] })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: en["usage.period.24h"] })).toHaveAttribute("aria-pressed", "false");
+  });
+});
+
+describe("usage in dollars", () => {
+  const cost = (overrides: Partial<Schemas["CostSummary"]> = {}): Schemas["CostSummary"] => ({
+    totalUSD: 4.12,
+    inputUSD: 1.1,
+    outputUSD: 2.4,
+    cacheReadUSD: 0.22,
+    cacheWriteUSD: 0.4,
+    cacheSavingsUSD: 3.8,
+    unpricedTokens: 0,
+    ...overrides,
+  });
+  const usageCosting = (summary: Schemas["CostSummary"]) =>
+    fixtures.usage({
+      from: "2026-09-23T07:00:00Z",
+      to: "2026-09-23T09:00:00Z",
+      totals: { requests: 3, tokensTotal: 1000, cost: summary },
+      points: [
+        { at: "2026-09-23T07:00:00Z", model: "claude-sonnet-5", requests: 1, tokensTotal: 100, costUSD: 1.5 },
+        { at: "2026-09-23T08:00:00Z", model: "claude-sonnet-5", requests: 2, tokensTotal: 900, costUSD: 2.62 },
+      ],
+    });
+
+  async function showDollars() {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: en["usage.unit.usd"] }));
+    return user;
+  }
+
+  it("plots each bucket's cost instead of its tokens, and breaks the total down", async () => {
+    cabinet([], usageCosting(cost()));
+    renderApp("/");
+    await screen.findByRole("img", { name: en["usage.chart"] });
+
+    await showDollars();
+
+    await waitFor(() => expect(plots.at(-1)?.data).toEqual([expect.any(Array), [1.5, 2.62]]));
+    expect(screen.getByRole("img", { name: en["usage.chartCost"] })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        fill(en["usage.costBreakdown"], {
+          total: "$4.12",
+          input: "$1.10",
+          output: "$2.40",
+          cacheRead: "$0.22",
+          cacheWrite: "$0.40",
+        }),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(fill(en["usage.cacheSaved"], { amount: "$3.80" }))).toBeInTheDocument();
+    expect(screen.getByText(en["usage.estimateNote"])).toBeInTheDocument();
+    expect(screen.queryByText(/have no price/)).not.toBeInTheDocument();
+  });
+
+  it("says when the prompt cache cost more than it saved, and what could not be priced", async () => {
+    cabinet([], usageCosting(cost({ cacheSavingsUSD: -0.3, unpricedTokens: 1840 })));
+    renderApp("/");
+
+    await showDollars();
+
+    expect(await screen.findByText(fill(en["usage.cacheExtra"], { amount: "$0.30" }))).toBeInTheDocument();
+    expect(screen.queryByText(/saved/)).not.toBeInTheDocument();
+    expect(screen.getByText(fill(en["usage.unpriced"], { n: "1,840" }))).toBeInTheDocument();
+  });
+
+  it("keeps the chosen unit for the next visit", async () => {
+    cabinet([], usageCosting(cost()));
+    renderApp("/");
+    await showDollars();
+    await screen.findByRole("img", { name: en["usage.chartCost"] });
+    cleanup();
+
+    renderApp("/");
+
+    expect(await screen.findByRole("img", { name: en["usage.chartCost"] })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en["usage.unit.usd"] })).toHaveAttribute("aria-pressed", "true");
   });
 });

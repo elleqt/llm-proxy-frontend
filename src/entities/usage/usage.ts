@@ -29,13 +29,16 @@ export interface ModelUsage {
   model: string;
   requests: number;
   tokensTotal: number;
+  costUSD: number;
 }
 
 export interface UsageSeries {
   /** Models by total tokens, most used first; one chart series each. */
   models: ModelUsage[];
   /** uPlot's aligned layout: bucket starts in Unix seconds, then tokens per model. */
-  data: uPlot.AlignedData;
+  tokens: uPlot.AlignedData;
+  /** The same layout with each bucket's estimated cost in US dollars. */
+  cost: uPlot.AlignedData;
 }
 
 /**
@@ -51,24 +54,27 @@ export function usageSeries(usage: Usage): UsageSeries {
   const xs = new Set<number>();
   for (let x = from; x < to; x += step) xs.add(x);
 
-  const perModel = new Map<string, { usage: ModelUsage; tokensAt: Map<number, number> }>();
+  const perModel = new Map<string, { usage: ModelUsage; tokensAt: Map<number, number>; costAt: Map<number, number> }>();
   for (const point of usage.points) {
     const x = Date.parse(point.at) / 1000;
     xs.add(x);
     let entry = perModel.get(point.model);
     if (entry === undefined) {
-      entry = { usage: { model: point.model, requests: 0, tokensTotal: 0 }, tokensAt: new Map() };
+      entry = { usage: { model: point.model, requests: 0, tokensTotal: 0, costUSD: 0 }, tokensAt: new Map(), costAt: new Map() };
       perModel.set(point.model, entry);
     }
     entry.usage.requests += point.requests;
     entry.usage.tokensTotal += point.tokensTotal;
+    entry.usage.costUSD += point.costUSD;
     entry.tokensAt.set(x, (entry.tokensAt.get(x) ?? 0) + point.tokensTotal);
+    entry.costAt.set(x, (entry.costAt.get(x) ?? 0) + point.costUSD);
   }
 
   const sortedXs = [...xs].sort((a, b) => a - b);
   const entries = [...perModel.values()].sort((a, b) => b.usage.tokensTotal - a.usage.tokensTotal);
   return {
     models: entries.map((entry) => entry.usage),
-    data: [sortedXs, ...entries.map((entry) => sortedXs.map((x) => entry.tokensAt.get(x) ?? 0))],
+    tokens: [sortedXs, ...entries.map((entry) => sortedXs.map((x) => entry.tokensAt.get(x) ?? 0))],
+    cost: [sortedXs, ...entries.map((entry) => sortedXs.map((x) => entry.costAt.get(x) ?? 0))],
   };
 }

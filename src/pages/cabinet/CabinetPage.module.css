@@ -127,3 +127,17 @@
     display: inline;
   }
 }
+
+.cost {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.cost p {
+  margin: 0.2rem 0;
+}
+
+.estimate {
+  color: var(--dim);
+  font-size: 0.85rem;
+}

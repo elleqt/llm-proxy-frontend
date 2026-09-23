@@ -195,6 +195,8 @@ function activity(user: Schemas["AdminUser"]): Schemas["Activity"] {
       stream: i % 2 === 0,
       statusCode: i === 1 ? 403 : 200,
       tokensTotal: i === 1 ? 0 : 1200 + i * 830,
+      // The refused request cost nothing; the last model has no price in this mock.
+      costUSD: i === 1 ? 0 : i === 2 ? null : 0.0123,
       latencyMs: 400 + i * 950,
     })),
     audit: [
@@ -460,6 +462,27 @@ const notFound = () => HttpResponse.json({ code: "not_found", message: "" }, { s
 
 const unauthenticated = () => HttpResponse.json({ code: "unauthenticated", message: "no session" }, { status: 401 });
 
+/**
+ * A plausible split of `total` into its parts: mostly output, a cache that
+ * mostly paid off; the parts add up to the total, as the contract says.
+ */
+function costSummary(total: number): Schemas["CostSummary"] {
+  const round = (usd: number) => Math.round(usd * 1e6) / 1e6;
+  const inputUSD = round(total * 0.27);
+  const cacheReadUSD = round(total * 0.05);
+  const cacheWriteUSD = round(total * 0.1);
+  const outputUSD = round(total - inputUSD - cacheReadUSD - cacheWriteUSD);
+  return {
+    totalUSD: round(total),
+    inputUSD,
+    outputUSD,
+    cacheReadUSD,
+    cacheWriteUSD,
+    cacheSavingsUSD: round(cacheReadUSD * 9 - cacheWriteUSD * 0.25),
+    unpricedTokens: total > 0 ? 1840 : 0,
+  };
+}
+
 function usage(from: Date, to: Date): Schemas["Usage"] {
   const bucket = to.getTime() - from.getTime() > 2 * 24 * HOUR ? "day" : "hour";
   const step = bucket === "hour" ? HOUR : 24 * HOUR;
@@ -469,7 +492,10 @@ function usage(from: Date, to: Date): Schemas["Usage"] {
       const wave = Math.sin(at / step / (2 + i)) + 1.2;
       const requests = Math.round(wave * (6 - i * 2));
       if (requests > 0) {
-        points.push({ at: new Date(at).toISOString(), model, requests, tokensTotal: requests * (900 + i * 700) });
+        const tokensTotal = requests * (900 + i * 700);
+        // About $3 per million input-ish tokens and $15 per million output, blended per model.
+        const costUSD = Math.round(tokensTotal * [9e-6, 4e-6, 2e-6][i]! * 1e6) / 1e6;
+        points.push({ at: new Date(at).toISOString(), model, requests, tokensTotal, costUSD });
       }
     });
   }
@@ -480,6 +506,7 @@ function usage(from: Date, to: Date): Schemas["Usage"] {
     totals: {
       requests: points.reduce((sum, p) => sum + p.requests, 0),
       tokensTotal: points.reduce((sum, p) => sum + p.tokensTotal, 0),
+      cost: costSummary(points.reduce((sum, p) => sum + p.costUSD, 0)),
     },
     points,
   };

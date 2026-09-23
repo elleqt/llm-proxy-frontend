@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { tokensQuery, type Token } from "../../entities/token/tokens";
-import { PERIODS, usageQuery, usageSeries, type ModelUsage, type Period } from "../../entities/usage/usage";
+import { PERIODS, usageQuery, usageSeries, type ModelUsage, type Period, type Usage } from "../../entities/usage/usage";
 import { IssueToken } from "../../features/issue-token/IssueToken";
 import { RevokeToken } from "../../features/revoke-token/RevokeToken";
 import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
+import { formatUSD } from "../../shared/lib/money";
+import { storedUsageUnit, storeUsageUnit, USAGE_UNITS, type UsageUnit } from "../../shared/lib/preferences";
+import { fill } from "../../shared/lib/template";
 import { Badge, Button, Card, Chart, EmptyState, Spinner, Table, type Column } from "../../shared/ui";
 import { AvailableModels } from "./AvailableModels";
 import styles from "./CabinetPage.module.css";
@@ -113,30 +116,48 @@ function Tokens() {
 function UsageSection() {
   const t = useT();
   const [period, setPeriod] = useState<Period>("24h");
+  const [unit, setUnit] = useState<UsageUnit>(storedUsageUnit);
   return (
     <Card
       title={t("usage.title")}
       actions={
-        <div role="group" aria-label={t("usage.period")} className={styles.periods}>
-          {PERIODS.map((value) => (
-            <Button
-              key={value}
-              aria-pressed={value === period}
-              className={styles.period}
-              onClick={() => setPeriod(value)}
-            >
-              {t(`usage.period.${value}`)}
-            </Button>
-          ))}
-        </div>
+        <>
+          <div role="group" aria-label={t("usage.unit")} className={styles.periods}>
+            {USAGE_UNITS.map((value) => (
+              <Button
+                key={value}
+                aria-pressed={value === unit}
+                className={styles.period}
+                onClick={() => {
+                  storeUsageUnit(value);
+                  setUnit(value);
+                }}
+              >
+                {t(`usage.unit.${value}`)}
+              </Button>
+            ))}
+          </div>
+          <div role="group" aria-label={t("usage.period")} className={styles.periods}>
+            {PERIODS.map((value) => (
+              <Button
+                key={value}
+                aria-pressed={value === period}
+                className={styles.period}
+                onClick={() => setPeriod(value)}
+              >
+                {t(`usage.period.${value}`)}
+              </Button>
+            ))}
+          </div>
+        </>
       }
     >
-      <UsageBody period={period} />
+      <UsageBody period={period} unit={unit} />
     </Card>
   );
 }
 
-function UsageBody({ period }: { period: Period }) {
+function UsageBody({ period, unit }: { period: Period; unit: UsageUnit }) {
   const t = useT();
   const [lang] = useLang();
   const errorMessage = useErrorMessage();
@@ -149,11 +170,15 @@ function UsageBody({ period }: { period: Period }) {
   if (usage.isError) return <p role="alert">{errorMessage(usage.error)}</p>;
   if (series === null || series.models.length === 0) return <EmptyState title={t("usage.empty")} />;
 
+  const usd = unit === "usd";
   const number = new Intl.NumberFormat(lang);
+  const money = (amount: number) => formatUSD(lang, amount);
   const columns: Column<ModelUsage>[] = [
     { id: "model", header: t("usage.model"), mono: true, cell: (row) => row.model },
     { id: "requests", header: t("usage.requests"), align: "end", cell: (row) => number.format(row.requests) },
-    { id: "tokens", header: t("usage.tokens"), align: "end", cell: (row) => number.format(row.tokensTotal) },
+    usd
+      ? { id: "cost", header: t("usage.cost"), align: "end", cell: (row) => money(row.costUSD) }
+      : { id: "tokens", header: t("usage.tokens"), align: "end", cell: (row) => number.format(row.tokensTotal) },
   ];
   return (
     <>
@@ -167,8 +192,42 @@ function UsageBody({ period }: { period: Period }) {
           <dd>{number.format(usage.data.totals.tokensTotal)}</dd>
         </div>
       </dl>
-      <Chart label={t("usage.chart")} data={series.data} series={chartSeries} />
+      {usd && <CostSummary cost={usage.data.totals.cost} />}
+      <Chart
+        label={t(usd ? "usage.chartCost" : "usage.chart")}
+        data={usd ? series.cost : series.tokens}
+        series={chartSeries}
+        unit={usd ? "usd" : "number"}
+      />
       <Table label={t("usage.byModel")} columns={columns} rows={series.models} rowKey={(row) => row.model} />
     </>
+  );
+}
+
+/** The period's estimated cost, its parts, the prompt cache's effect and what could not be priced. */
+function CostSummary({ cost }: { cost: Usage["totals"]["cost"] }) {
+  const t = useT();
+  const [lang] = useLang();
+  const money = (amount: number) => formatUSD(lang, amount);
+  const savings = cost.cacheSavingsUSD;
+  return (
+    <div className={styles.cost}>
+      <p>
+        {fill(t("usage.costBreakdown"), {
+          total: money(cost.totalUSD),
+          input: money(cost.inputUSD),
+          output: money(cost.outputUSD),
+          cacheRead: money(cost.cacheReadUSD),
+          cacheWrite: money(cost.cacheWriteUSD),
+        })}
+      </p>
+      {savings !== 0 && (
+        <p>{fill(t(savings > 0 ? "usage.cacheSaved" : "usage.cacheExtra"), { amount: money(Math.abs(savings)) })}</p>
+      )}
+      {cost.unpricedTokens > 0 && (
+        <p>{fill(t("usage.unpriced"), { n: new Intl.NumberFormat(lang).format(cost.unpricedTokens) })}</p>
+      )}
+      <p className={styles.estimate}>{t("usage.estimateNote")}</p>
+    </div>
   );
 }

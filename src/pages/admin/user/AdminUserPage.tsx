@@ -15,6 +15,7 @@ import { PolicyEditor } from "../../../features/policy-editor/PolicyEditor";
 import { ApiError, client, unwrap } from "../../../shared/api/client";
 import type { components } from "../../../shared/api/schema";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../../shared/i18n";
+import { formatUSD } from "../../../shared/lib/money";
 import { fill } from "../../../shared/lib/template";
 import {
   Badge,
@@ -505,6 +506,8 @@ function UserActivity({ userId }: { userId: string }) {
     { id: "model", header: t("usage.model"), mono: true, cell: (row) => `${row.provider}:${row.model}` },
     { id: "status", header: t("admin.statusCode"), align: "end", cell: (row) => row.statusCode },
     { id: "tokens", header: t("usage.tokens"), align: "end", cell: (row) => number.format(row.tokensTotal) },
+    // Null: the request could not be priced (no price for the model when it was served).
+    { id: "cost", header: t("usage.cost"), align: "end", cell: (row) => (row.costUSD == null ? "—" : formatUSD(lang, row.costUSD)) },
     {
       id: "latency",
       header: t("admin.latency"),

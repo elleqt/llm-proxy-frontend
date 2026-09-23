@@ -1,6 +1,7 @@
-// Theme and language: the only two things the client keeps in localStorage.
-// The pre-paint script (src/app/prepaint.ts) applies them before first paint;
-// everything here keeps the <html> attributes and storage in step afterwards.
+// Display preferences, the only things the client keeps in localStorage: theme
+// and language, which the pre-paint script (src/app/prepaint.ts) applies before
+// first paint, and the usage chart's unit. Everything here keeps the <html>
+// attributes and storage in step afterwards.
 
 export const THEMES = ["auto", "light", "pink", "dark"] as const;
 export const LANGS = ["en", "ru"] as const;
@@ -34,6 +35,24 @@ export function currentTheme(): Theme {
 export function currentLang(): Lang {
   const value = document.documentElement.getAttribute("data-lang");
   return isLang(value) ? value : DEFAULT_LANG;
+}
+
+/** What the usage chart plots; remembered like the theme. */
+export const USAGE_UNITS = ["tokens", "usd"] as const;
+export type UsageUnit = (typeof USAGE_UNITS)[number];
+export const USAGE_UNIT_KEY = "usageUnit";
+
+export function storedUsageUnit(): UsageUnit {
+  try {
+    const value = localStorage.getItem(USAGE_UNIT_KEY);
+    return (USAGE_UNITS as readonly unknown[]).includes(value) ? (value as UsageUnit) : "tokens";
+  } catch {
+    return "tokens";
+  }
+}
+
+export function storeUsageUnit(unit: UsageUnit): void {
+  persist(USAGE_UNIT_KEY, unit);
 }
 
 export function applyTheme(theme: Theme): void {

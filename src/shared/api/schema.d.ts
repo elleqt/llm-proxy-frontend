@@ -562,6 +562,7 @@ export interface components {
                 requests: number;
                 /** @description Every token spent, including tokens of failed or retried attempts. */
                 tokensTotal: number;
+                cost: components["schemas"]["CostSummary"];
             };
             points: {
                 /**
@@ -573,7 +574,47 @@ export interface components {
                 /** @description Served requests in this bucket, as in `totals.requests`. */
                 requests: number;
                 tokensTotal: number;
+                /**
+                 * Format: double
+                 * @description The priced part of this bucket's spend, as in `totals.cost.totalUSD`.
+                 */
+                costUSD: number;
             }[];
+        };
+        /** @description What the tokens would have cost at the vendor's list prices, in US dollars: an estimate of work done, not a bill. Each request is priced when it is served, at the prices in force then, so a later price change does not rewrite history. */
+        CostSummary: {
+            /**
+             * Format: double
+             * @description The sum of the four parts below.
+             */
+            totalUSD: number;
+            /**
+             * Format: double
+             * @description Input tokens not read from or written to the prompt cache, at the input rate.
+             */
+            inputUSD: number;
+            /**
+             * Format: double
+             * @description Output tokens, reasoning included, at the output rate.
+             */
+            outputUSD: number;
+            /**
+             * Format: double
+             * @description Input tokens read from the prompt cache, at the cache-read rate.
+             */
+            cacheReadUSD: number;
+            /**
+             * Format: double
+             * @description Input tokens written to the prompt cache, at the cache-write rate.
+             */
+            cacheWriteUSD: number;
+            /**
+             * Format: double
+             * @description The net effect of prompt caching against paying the input rate for every input token: what cache reads saved (cache-read tokens at input minus cache-read rate) less what cache writes cost extra (cache-write tokens at cache-write minus input rate). Negative when writes cost more than reads saved.
+             */
+            cacheSavingsUSD: number;
+            /** @description Tokens with no price when served (a model missing from the price list, or tokens the vendor did not classify). They are not in `totalUSD`, not counted as free. */
+            unpricedTokens: number;
         };
         ConnectInfo: {
             /** @description Public base URL of the proxied API, without a trailing slash. */
@@ -643,6 +684,11 @@ export interface components {
                 statusCode: number;
                 tokensTotal: number;
                 latencyMs: number;
+                /**
+                 * Format: double
+                 * @description The request's estimated cost, as in CostSummary.totalUSD; null when none of its tokens had a price.
+                 */
+                costUSD?: number | null;
             }[];
             audit: {
                 /** Format: date-time */

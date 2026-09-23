@@ -54,7 +54,11 @@ export const fixtures = {
     from: "2026-09-22T10:00:00Z",
     to: "2026-09-23T10:00:00Z",
     bucket: "hour",
-    totals: { requests: 0, tokensTotal: 0 },
+    totals: {
+      requests: 0,
+      tokensTotal: 0,
+      cost: { totalUSD: 0, inputUSD: 0, outputUSD: 0, cacheReadUSD: 0, cacheWriteUSD: 0, cacheSavingsUSD: 0, unpricedTokens: 0 },
+    },
     points: [],
     ...overrides,
   }),

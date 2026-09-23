@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { useLang, useT } from "../i18n";
+import { formatUSD } from "../lib/money";
 import styles from "./Chart.module.css";
 
 export interface ChartSeries {
@@ -18,6 +19,8 @@ export interface ChartProps {
   data: uPlot.AlignedData;
   series: readonly ChartSeries[];
   height?: number;
+  /** How values read on the axis and in the legend: plain numbers, or US dollars. */
+  unit?: "number" | "usd";
 }
 
 const TOKENS = ["--fg", "--dim", "--line", "--accent"] as const;
@@ -56,6 +59,7 @@ const DAY = 86_400;
 
 interface Locale {
   lang: string;
+  unit: "number" | "usd";
   /** Legend label of the x (time) series. */
   time: string;
 }
@@ -84,6 +88,8 @@ function options(
   // Formatting only: the numbers themselves come from the backend as they are.
   const number = new Intl.NumberFormat(locale.lang);
   const compact = new Intl.NumberFormat(locale.lang, { notation: "compact" });
+  const usd = locale.unit === "usd";
+  const value = (v: number) => (usd ? formatUSD(locale.lang, v) : number.format(v));
   const moment = new Intl.DateTimeFormat(locale.lang, { dateStyle: "medium", timeStyle: "short" });
   const clock = new Intl.DateTimeFormat(locale.lang, { hour: "2-digit", minute: "2-digit" });
   const day = new Intl.DateTimeFormat(locale.lang, { day: "numeric", month: "short" });
@@ -105,7 +111,7 @@ function options(
       },
       ...labels.map((label, i) => ({
         label,
-        value: (_self: uPlot, v: number | null) => (v == null ? "—" : number.format(v)),
+        value: (_self: uPlot, v: number | null) => (v == null ? "—" : value(v)),
         stroke: lineColors[i % lineColors.length] ?? palette["--accent"],
         dash: DASHES[Math.floor(i / lineColors.length) % DASHES.length] ?? [],
         width: 2,
@@ -121,7 +127,7 @@ function options(
       {
         ...style,
         size: axisSize,
-        values: (_self, splits) => splits.map((v) => compact.format(v)),
+        values: (_self, splits) => splits.map((v) => (usd ? formatUSD(locale.lang, v) : compact.format(v))),
       },
     ],
     cursor: { points: { show: false } },
@@ -133,10 +139,10 @@ function options(
  * is loaded on first use, keeping it out of the bundle for pages without charts.
  *
  * New `data` is handed to the existing plot. The plot is rebuilt only when
- * what it looks like changes: the series labels, the height or the theme — so
+ * what it looks like changes: the series labels, the height, the unit or the theme — so
  * a caller may pass a fresh `series` array on every render.
  */
-export function Chart({ label, data, series, height = 240 }: ChartProps) {
+export function Chart({ label, data, series, height = 240, unit = "number" }: ChartProps) {
   const t = useT();
   const [lang] = useLang();
   const time = t("ui.chartTime");
@@ -157,7 +163,7 @@ export function Chart({ label, data, series, height = 240 }: ChartProps) {
         if (cancelled) return;
         let width = container.clientWidth;
         const plot = new UPlot(
-          options(parsePalette(palette), JSON.parse(labels) as string[], { lang, time }, width, height),
+          options(parsePalette(palette), JSON.parse(labels) as string[], { lang, time, unit }, width, height),
           dataRef.current,
           container,
         );
@@ -180,7 +186,7 @@ export function Chart({ label, data, series, height = 240 }: ChartProps) {
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [palette, labels, height, lang, time]);
+  }, [palette, labels, height, lang, time, unit]);
 
   useEffect(() => {
     dataRef.current = data;
