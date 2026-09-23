@@ -166,7 +166,7 @@ export const en = {
   "connect.keyPlaceholder": "<your-key>",
   "connect.modelPlaceholder": "<model-id>",
   "connect.claude": "Set these variables in the shell you start Claude Code from:",
-  "connect.omp": "Add a provider to ~/.omp/agent/models.yml. omp discovers the models your access policy allows:",
+  "connect.omp": "Point omp's built-in providers at the proxy in ~/.omp/agent/models.yml. omp keeps its own model list and features (thinking, prompt caching, Codex tools); requests just go through the proxy with your key. supportsEagerToolInputStreaming streams tool arguments while the model writes them - keep it on.",
   "connect.curlModels": "Check the key and list the models you may use:",
   "connect.curlChat": "Send a request through the OpenAI-compatible API:",
   "connect.trouble": "If it does not work",

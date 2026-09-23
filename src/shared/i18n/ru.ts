@@ -166,7 +166,7 @@ export const ru: Messages = {
   "connect.keyPlaceholder": "<ваш-ключ>",
   "connect.modelPlaceholder": "<id-модели>",
   "connect.claude": "Задайте переменные в оболочке, из которой запускаете Claude Code:",
-  "connect.omp": "Добавьте провайдера в ~/.omp/agent/models.yml. omp сам узнает модели, разрешённые вашей политикой доступа:",
+  "connect.omp": "Направьте встроенные провайдеры omp на прокси в ~/.omp/agent/models.yml. omp сохраняет свой список моделей и возможности (рассуждения, кеш промптов, инструменты Codex), а запросы просто идут через прокси с вашим ключом. supportsEagerToolInputStreaming стримит аргументы инструментов, пока модель их пишет, — оставьте включённым.",
   "connect.curlModels": "Проверьте ключ и получите список доступных вам моделей:",
   "connect.curlChat": "Отправьте запрос через OpenAI-совместимый API:",
   "connect.trouble": "Если не работает",

@@ -6,23 +6,40 @@ export interface Snippets {
 }
 
 /**
- * The instruction blocks, every address derived from the deployment's
- * `apiBaseURL`: Claude Code speaks the Anthropic API at the base itself (it
- * appends `/v1/messages`); omp and curl use the OpenAI-compatible API under `/v1`.
+ * omp's built-in providers pointed at the proxy, keyed by the gateway's
+ * provider name (as in `/api/me/models`). omp keeps its own model list and
+ * features; only the address and the key change.
  */
-export function snippets(apiBaseURL: string, key: string, model: string): Snippets {
+const OMP_PROVIDERS: Record<string, (base: string, key: string) => string[]> = {
+  claude: (base, key) => [
+    "  anthropic:",
+    `    baseUrl: ${base}`,
+    `    apiKey: "${key}"`,
+    "    api: anthropic-messages",
+    "    authHeader: true",
+    "    compat:",
+    "      supportsEagerToolInputStreaming: true",
+  ],
+  chatgpt: (base, key) => ["  openai-codex:", `    baseUrl: ${base}/backend-api`, `    apiKey: "${key}"`, "    authHeader: true"],
+};
+
+/**
+ * The instruction blocks, every address derived from the deployment's
+ * `apiBaseURL`: Claude Code and omp's Anthropic provider speak the Anthropic
+ * API at the base itself, omp's Codex provider the ChatGPT backend API under
+ * `/backend-api`, curl the OpenAI-compatible API under `/v1`.
+ *
+ * `providers` are the gateway providers the user may use; omp gets a block for
+ * each it has one for, or every block when that leaves none (a list not loaded
+ * yet, or empty).
+ */
+export function snippets(apiBaseURL: string, key: string, model: string, providers: readonly string[] = []): Snippets {
   const base = apiBaseURL.replace(/\/+$/, "");
+  const usable = providers.filter((name) => Object.hasOwn(OMP_PROVIDERS, name));
+  const omp = (usable.length > 0 ? usable : Object.keys(OMP_PROVIDERS)).flatMap((name) => OMP_PROVIDERS[name]!(base, key));
   return {
     claudeCode: [`export ANTHROPIC_BASE_URL="${base}"`, `export ANTHROPIC_AUTH_TOKEN="${key}"`, "claude"].join("\n"),
-    omp: [
-      "providers:",
-      "  llm-proxy:",
-      `    baseUrl: ${base}/v1`,
-      `    apiKey: "${key}"`,
-      "    api: openai-completions",
-      "    discovery:",
-      "      type: openai-models-list",
-    ].join("\n"),
+    omp: ["providers:", ...omp].join("\n"),
     curlModels: [`curl ${base}/v1/models \\`, `  -H "Authorization: Bearer ${key}"`].join("\n"),
     curlChat: [
       `curl ${base}/v1/chat/completions \\`,

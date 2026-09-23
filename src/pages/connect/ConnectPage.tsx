@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { connectInfoQuery } from "../../entities/connect/connectInfo";
+import { myModelsQuery } from "../../entities/user/myModels";
 import { takeFreshToken, type FreshToken } from "../../entities/token/tokens";
 import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useT } from "../../shared/i18n";
@@ -13,6 +14,8 @@ export function ConnectPage() {
   const t = useT();
   const errorMessage = useErrorMessage();
   const info = useQuery(connectInfoQuery);
+  // Which of omp's providers to show; until it answers, all of them.
+  const models = useQuery(myModelsQuery);
   // The key handed over by the issue dialog lives in this page's state and
   // dies with it: leaving /connect and coming back shows the placeholder.
   const [fresh, setFresh] = useState<FreshToken | null>(null);
@@ -32,7 +35,12 @@ export function ConnectPage() {
   } else if (info.isError) {
     body = <p role="alert">{errorMessage(info.error)}</p>;
   } else {
-    const blocks = snippets(info.data.apiBaseURL, fresh?.secret ?? placeholder, t("connect.modelPlaceholder"));
+    const blocks = snippets(
+      info.data.apiBaseURL,
+      fresh?.secret ?? placeholder,
+      t("connect.modelPlaceholder"),
+      models.data?.providers.map((provider) => provider.name),
+    );
     body = (
       <>
         <h2>Claude Code</h2>

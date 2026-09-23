@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { en } from "../../shared/i18n/en";
 import { renderApp } from "../../test/render";
@@ -16,7 +16,10 @@ describe("/connect without a key issued in this tab", () => {
     const claude = await screen.findByText(/ANTHROPIC_BASE_URL/);
     expect(claude).toHaveTextContent(`export ANTHROPIC_BASE_URL="https://llm.example.com"`);
     expect(claude).toHaveTextContent(`export ANTHROPIC_AUTH_TOKEN="${key}"`);
-    expect(screen.getByText(/openai-completions/)).toHaveTextContent("baseUrl: https://llm.example.com/v1");
+    // The standing /api/me/models answer allows only claude: omp gets only its Anthropic provider.
+    const omp = await screen.findByText(/anthropic-messages/);
+    expect(omp).toHaveTextContent(`apiKey: "${key}"`);
+    await waitFor(() => expect(omp).not.toHaveTextContent("openai-codex"));
     expect(screen.getByText(/curl .*\/v1\/models/)).toHaveTextContent(
       `curl https://llm.example.com/v1/models \\ -H "Authorization: Bearer ${key}"`,
     );
