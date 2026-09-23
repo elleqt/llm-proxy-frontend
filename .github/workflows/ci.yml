@@ -122,13 +122,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Each platform runs by its own manifest digest from the pushed index: the
+      # engine's image store keeps one image per digest reference, so running the
+      # index digest a second time for another platform fails.
       - name: Every platform starts and serves /healthz
         env:
-          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          INDEX: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
         run: |
+          manifests="$(docker buildx imagetools inspect "$INDEX" --format '{{json .Manifest}}')"
           for platform in ${PLATFORMS//,/ }; do
+            digest="$(jq -r --arg os "${platform%/*}" --arg arch "${platform#*/}" \
+              '.manifests[] | select(.platform.os == $os and .platform.architecture == $arch) | .digest' <<<"$manifests")"
+            [ -n "$digest" ] || { echo "$platform: not in $INDEX" >&2; exit 1; }
             name="smoke-${platform//\//-}"
-            docker run -d --name "$name" --platform "$platform" -e BACKEND_ORIGIN=http://127.0.0.1:9 "$REF"
+            echo "$platform: $IMAGE@$digest"
+            docker run -d --name "$name" --platform "$platform" -e BACKEND_ORIGIN=http://127.0.0.1:9 "$IMAGE@$digest"
             ok=
             for _ in $(seq 60); do
               if docker exec "$name" wget -qO- http://127.0.0.1:8080/healthz; then ok=1; break; fi
@@ -141,13 +149,12 @@ jobs:
               linux/amd64:x86_64 | linux/arm64:aarch64) ;;
               *) echo "$platform ran as $arch" >&2; exit 1 ;;
             esac
+            if [ "$platform" = linux/amd64 ]; then echo "AMD64_REF=$IMAGE@$digest" >>"$GITHUB_ENV"; fi
             docker rm -f "$name"
           done
       - name: Headers of the pushed amd64 image
-        env:
-          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
         run: |
-          docker run -d --name frontend --platform linux/amd64 -p 127.0.0.1:8080:8080 -e BACKEND_ORIGIN=http://127.0.0.1:9 "$REF"
+          docker run -d --name frontend --platform linux/amd64 -p 127.0.0.1:8080:8080 -e BACKEND_ORIGIN=http://127.0.0.1:9 "$AMD64_REF"
           for _ in $(seq 30); do
             status=$(docker inspect -f '{{.State.Health.Status}}' frontend || echo gone)
             [ "$status" = healthy ] && break
