@@ -321,11 +321,140 @@ function diffOf(before: string, after: string): string {
   return removed.length + added.length === 0 ? "" : `--- running\n+++ proposed\n${[...removed, ...added].join("\n")}\n`;
 }
 
-let prices: Schemas["ModelPrice"][] = [
-  { provider: "claude", model: "claude-sonnet-5", input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  { provider: "claude", model: "claude-opus-5", input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-  { provider: "chatgpt", model: "gpt-6", input: 2.5, output: 10, cacheRead: 0.25, cacheWrite: 0 },
+// The price catalog: a few dozen models, as an automatic source would publish them.
+const CATALOG_PRICES: Schemas["ModelPrice"][] = [
+  ...[
+    ["claude-opus-5", 15, 75],
+    ["claude-opus-4-5", 5, 25],
+    ["claude-sonnet-5", 3, 15],
+    ["claude-sonnet-4-5", 3, 15],
+    ["claude-haiku-5", 1, 5],
+    ["claude-haiku-4-5", 1, 5],
+    ["claude-3-7-sonnet", 3, 15],
+    ["claude-3-5-haiku", 0.8, 4],
+  ].map(([model, input, output]) => ({
+    provider: "claude",
+    model: model as string,
+    input: input as number,
+    output: output as number,
+    cacheRead: (input as number) / 10,
+    cacheWrite: (input as number) * 1.25,
+  })),
+  ...[
+    ["gpt-6", 2.5, 10],
+    ["gpt-6-mini", 0.4, 1.6],
+    ["gpt-6-nano", 0.1, 0.4],
+    ["gpt-5.1", 1.25, 10],
+    ["gpt-5.1-mini", 0.25, 2],
+    ["gpt-5.1-codex", 1.25, 10],
+    ["gpt-5", 1.25, 10],
+    ["gpt-5-mini", 0.25, 2],
+    ["gpt-4.1", 2, 8],
+    ["gpt-4.1-mini", 0.4, 1.6],
+    ["o5", 10, 40],
+    ["o4-mini", 1.1, 4.4],
+    ["o3", 2, 8],
+  ].map(([model, input, output]) => ({
+    provider: "chatgpt",
+    model: model as string,
+    input: input as number,
+    output: output as number,
+    cacheRead: (input as number) / 4,
+    cacheWrite: 0,
+  })),
+  ...[
+    ["gemini-3-pro", 2, 12],
+    ["gemini-3-flash", 0.3, 2.5],
+    ["gemini-2.5-pro", 1.25, 10],
+    ["gemini-2.5-flash", 0.3, 2.5],
+    ["gemini-2.5-flash-lite", 0.1, 0.4],
+  ].map(([model, input, output]) => ({
+    provider: "gemini",
+    model: model as string,
+    input: input as number,
+    output: output as number,
+    cacheRead: (input as number) / 4,
+    cacheWrite: 0,
+  })),
+  ...[
+    ["deepseek-v4", 0.27, 1.1],
+    ["deepseek-r2", 0.55, 2.19],
+    ["qwen3-coder", 0.3, 1.2],
+    ["qwen3-max", 1.2, 6],
+    ["kimi-k2", 0.6, 2.5],
+    ["glm-4.6", 0.6, 2.2],
+    ["mistral-large-3", 2, 6],
+    ["codestral-2", 0.3, 0.9],
+  ].map(([model, input, output]) => ({
+    provider: "openrouter",
+    model: model as string,
+    input: input as number,
+    output: output as number,
+    cacheRead: 0,
+    cacheWrite: 0,
+  })),
 ];
+const catalogUpdatedAt = ago(6 * 24 * HOUR);
+/** The administrator's overrides: one on a catalog model, one for a model the catalog lacks. */
+let manualPrices: (Schemas["ModelPrice"] & { updatedAt: string })[] = [
+  {
+    provider: "claude",
+    model: "claude-sonnet-5",
+    input: 2.5,
+    output: 12,
+    cacheRead: 0.25,
+    cacheWrite: 3,
+    updatedAt: ago(2 * 24 * HOUR),
+  },
+  {
+    provider: "local",
+    model: "llama-4-70b",
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    updatedAt: ago(9 * 24 * HOUR),
+  },
+];
+let priceCatalog: Schemas["PriceCatalog"] = {
+  enabled: true,
+  checkedAt: ago(26 * HOUR),
+  changedAt: ago(6 * 24 * HOUR),
+  models: CATALOG_PRICES.length,
+  // A failed scheduled check, so the warning can be seen; "Refresh now" clears it.
+  lastError: "GET https://catalog.example.com/models.json: 503 Service Unavailable",
+};
+
+const key = (price: { provider: string; model: string }) => `${price.provider}:${price.model}`;
+
+function priceList(): Schemas["PriceList"] {
+  const manual = new Map(manualPrices.map((price) => [key(price), price]));
+  const catalogByKey = new Map(CATALOG_PRICES.map((price) => [key(price), price]));
+  const rates = ({ input, output, cacheRead, cacheWrite }: Schemas["ModelPrice"]) => ({
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+  });
+  const entries: Schemas["PriceEntry"][] = [
+    ...CATALOG_PRICES.filter((price) => !manual.has(key(price))).map((price) => ({
+      ...price,
+      source: "catalog" as const,
+      updatedAt: catalogUpdatedAt,
+    })),
+    ...manualPrices.map(({ updatedAt, ...price }) => {
+      const fromCatalog = catalogByKey.get(key(price));
+      return {
+        ...price,
+        source: "manual" as const,
+        updatedAt,
+        ...(fromCatalog === undefined ? {} : { catalogRates: rates(fromCatalog) }),
+      };
+    }),
+  ];
+  entries.sort((a, b) => a.provider.localeCompare(b.provider) || a.model.localeCompare(b.model));
+  return { prices: entries, catalog: priceCatalog };
+}
 
 const notFound = () => HttpResponse.json({ code: "not_found", message: "" }, { status: 404 });
 
@@ -586,10 +715,33 @@ const handlers = [
     if (!body.dryRun) settings = next;
     return response(200).json({ applied: !body.dryRun, diff, settings: next });
   }),
-  http.get("/api/admin/prices", ({ response }) => response(200).json(prices)),
+  http.get("/api/admin/prices", ({ response }) => response(200).json(priceList())),
   http.put("/api/admin/prices", async ({ request, response }) => {
-    prices = await request.json();
-    return response(200).json(prices);
+    const body = await request.json();
+    const seen = new Set<string>();
+    for (const [i, price] of body.entries()) {
+      for (const rate of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+        if (!(price[rate] >= 0))
+          return response(422).json({ code: "invalid_input", message: "", field: `[${i}].${rate}` });
+      }
+      if (seen.has(key(price))) return response(422).json({ code: "invalid_input", message: "", field: `[${i}]` });
+      seen.add(key(price));
+    }
+    const now = new Date().toISOString();
+    const before = new Map(manualPrices.map((price) => [key(price), price]));
+    manualPrices = body.map((price) => {
+      const old = before.get(key(price));
+      const same =
+        old !== undefined &&
+        (["input", "output", "cacheRead", "cacheWrite"] as const).every((r) => old[r] === price[r]);
+      return { ...price, updatedAt: same ? old.updatedAt : now };
+    });
+    return response(200).json(priceList());
+  }),
+  http.post("/api/admin/prices/refresh", ({ response }) => {
+    if (!priceCatalog.enabled) return response(409).json({ code: "catalog_disabled", message: "" });
+    priceCatalog = { ...priceCatalog, checkedAt: new Date().toISOString(), lastError: null };
+    return response(200).json(priceList());
   }),
 ];
 

@@ -424,8 +424,26 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getPrices"];
+        /** Replace the manual overrides. The body is the whole override list: a row it omits falls back to the catalog price (or is dropped if the catalog has none). */
         put: operations["replacePrices"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/prices/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the price catalog now instead of waiting for the next scheduled check. The outcome is in `catalog`: a failure sets `lastError` and keeps the prices in force. */
+        post: operations["refreshPriceCatalog"];
         delete?: never;
         options?: never;
         head?: never;
@@ -736,6 +754,66 @@ export interface components {
             cacheRead: number;
             /** Format: double */
             cacheWrite: number;
+        };
+        /** @description US dollars per million tokens. */
+        PriceRates: {
+            /** Format: double */
+            input: number;
+            /** Format: double */
+            output: number;
+            /** Format: double */
+            cacheRead: number;
+            /** Format: double */
+            cacheWrite: number;
+        };
+        /** @description One price in force, in US dollars per million tokens. */
+        PriceEntry: {
+            provider: string;
+            model: string;
+            /** Format: double */
+            input: number;
+            /** Format: double */
+            output: number;
+            /** Format: double */
+            cacheRead: number;
+            /** Format: double */
+            cacheWrite: number;
+            /**
+             * @description `manual` is an administrator's override; it wins over the catalog.
+             * @enum {string}
+             */
+            source: "catalog" | "manual";
+            /**
+             * Format: date-time
+             * @description When this row's rates last changed.
+             */
+            updatedAt: string;
+            /** @description For a `manual` row, the catalog's rates for the same model - what removing the override restores. Absent for a `catalog` row and when the catalog has no price. */
+            catalogRates?: components["schemas"]["PriceRates"];
+        };
+        /** @description The automatically updated price catalog. */
+        PriceCatalog: {
+            /** @description False when no catalog source is configured. */
+            enabled: boolean;
+            /**
+             * Format: date-time
+             * @description The last successful check, whether or not the catalog had changed.
+             */
+            checkedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the catalog prices in force last changed.
+             */
+            changedAt?: string | null;
+            /** @description How many catalog prices are in force. */
+            models: number;
+            /** @description Why the last check failed; null once a check succeeds. */
+            lastError?: string | null;
+        };
+        PriceList: {
+            /** @description Ordered by provider, then model. */
+            prices: components["schemas"]["PriceEntry"][];
+            catalog: components["schemas"]["PriceCatalog"];
         };
     };
     responses: never;
@@ -1657,13 +1735,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The price list used to estimate cost in metrics. */
+            /** @description The effective price list used to estimate cost in metrics - the catalog's prices with the administrator's overrides on top - and the catalog's state. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModelPrice"][];
+                    "application/json": components["schemas"]["PriceList"];
                 };
             };
         };
@@ -1687,11 +1765,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModelPrice"][];
+                    "application/json": components["schemas"]["PriceList"];
                 };
             };
             /** @description `invalid_input` with `field` naming the entry and value, e.g. `[2].input` (a negative price) or `[3]` (a provider and model listed twice). Nothing is replaced. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    refreshPriceCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceList"];
+                };
+            };
+            /** @description `catalog_disabled` - no catalog source is configured. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
