@@ -99,6 +99,7 @@ export const en = {
   "access.askAdmin": "Ask an administrator to grant it.",
   "access.providerFallback": "the identity provider",
   "access.noMatch": "Your rules match no model available right now.",
+  "access.askCheck": "Ask an administrator to check your access.",
   "models.title": "Available models",
   "models.rules": "Your rules",
   "models.rulesIdp": "Your rules come from your groups in {provider}:",

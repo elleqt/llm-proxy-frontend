@@ -62,9 +62,12 @@ describe("the no-model-access notice", () => {
     await pageShown("/connect", en["page.connect.title"]);
     await pageShown("/", en["page.cabinet.title"]);
 
-    await waitFor(() => expect(screen.getAllByText(en["access.noMatch"])).toHaveLength(2));
-    const notices = screen.getAllByText(en["access.noMatch"]);
-    for (const notice of notices) expect(notice).toHaveAttribute("role", "status");
+    const noMatch = new RegExp(en["access.noMatch"]);
+    await waitFor(() => expect(screen.getAllByText(noMatch)).toHaveLength(2));
+    for (const notice of screen.getAllByText(noMatch)) {
+      expect(notice).toHaveAttribute("role", "status");
+      expect(notice).toHaveTextContent(en["access.askCheck"]);
+    }
   });
 
   it("is absent when the policy allows some model", async () => {

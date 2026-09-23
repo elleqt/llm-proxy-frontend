@@ -99,6 +99,7 @@ export const ru: Messages = {
   "access.askAdmin": "Попросите администратора его выдать.",
   "access.providerFallback": "провайдере учётных записей",
   "access.noMatch": "Под ваши правила сейчас не подходит ни одна доступная модель.",
+  "access.askCheck": "Попросите администратора проверить ваш доступ.",
   "models.title": "Доступные модели",
   "models.rules": "Ваши правила",
   "models.rulesIdp": "Ваши правила заданы группами в {provider}:",

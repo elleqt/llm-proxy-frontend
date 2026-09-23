@@ -25,7 +25,7 @@ export function NoModelAccessNotice() {
   if (noMatch) {
     return (
       <p role="status" className={styles.notice}>
-        {t("access.noMatch")}
+        {t("access.noMatch")} {t("access.askCheck")}
       </p>
     );
   }
