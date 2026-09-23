@@ -45,6 +45,9 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       setupFiles: ["src/test/setup.ts"],
       restoreMocks: true,
+      // Above the waits in src/test/setup.ts, so a wait that runs out reports what it
+      // was waiting for instead of the test being cut off.
+      testTimeout: 20000,
     },
   };
 });
