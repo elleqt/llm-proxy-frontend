@@ -120,7 +120,7 @@ useMutation({
 
 **Gotcha.** `ToastProvider`/`useToast` exist in `shared/ui` but are not mounted in `App`. Mount the provider before calling `useToast`.
 
-**Commits.** `type(scope): summary`, lowercase: `fix(dev): ...`, `ci: ...`, `e2e, docs: ...`.
+**Commits.** `type(scope): summary`, lowercase: `fix(dev): ...`, `ci: ...`, `e2e, docs: ...`. `main` accepts only squash-merged pull requests with green CI (`check`, `image`); direct and force pushes are refused. Work on a branch and give the PR a title in that form: it becomes the commit on `main`.
 
 ## Important Files
 
