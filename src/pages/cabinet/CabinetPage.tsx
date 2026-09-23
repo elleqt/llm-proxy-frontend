@@ -4,7 +4,7 @@ import { tokensQuery, type Token } from "../../entities/token/tokens";
 import { PERIODS, usageQuery, usageSeries, type ModelUsage, type Period } from "../../entities/usage/usage";
 import { IssueToken } from "../../features/issue-token/IssueToken";
 import { RevokeToken } from "../../features/revoke-token/RevokeToken";
-import { useErrorMessage, useLang, useT } from "../../shared/i18n";
+import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
 import { Badge, Button, Card, Chart, EmptyState, Spinner, Table, type Column } from "../../shared/ui";
 import styles from "./CabinetPage.module.css";
 
@@ -27,37 +27,65 @@ function Tokens() {
   const errorMessage = useErrorMessage();
   const tokens = useQuery(tokensQuery);
   const listRef = useRef<HTMLDivElement>(null);
-  const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
+  // The date alone keeps the cell on one line; the exact moment is in the tooltip.
+  const date = new Intl.DateTimeFormat(lang, { dateStyle: "medium" });
+  const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "long", timeStyle: "short" });
+  const when = (iso: string) => (
+    <time dateTime={iso} title={dateTime.format(new Date(iso))} className={styles.nowrap}>
+      {date.format(new Date(iso))}
+    </time>
+  );
+  // On a narrow screen the table becomes one card per key and loses its header
+  // row, so the date cells name themselves there (hidden on a wide one).
+  const named = (key: MessageKey) => <span className={styles.cellName}>{t(key)}: </span>;
 
   const columns: Column<Token>[] = [
-    { id: "label", header: t("tokens.label"), cell: (token) => token.label },
-    { id: "prefix", header: t("tokens.prefix"), mono: true, cell: (token) => <span className={styles.nowrap}>{token.prefix}…</span> },
-    { id: "created", header: t("tokens.created"), cell: (token) => dateTime.format(new Date(token.createdAt)) },
+    { id: "label", header: t("tokens.label"), cell: (token) => <span className={styles.label}>{token.label}</span> },
+    // The prefix is all the server keeps: shown whole, with nothing that suggests more.
+    { id: "prefix", header: t("tokens.prefix"), mono: true, cell: (token) => <span className={styles.prefix}>{token.prefix}</span> },
+    {
+      id: "created",
+      header: t("tokens.created"),
+      cell: (token) => (
+        <span className={styles.date}>
+          {named("tokens.created")}
+          {when(token.createdAt)}
+        </span>
+      ),
+    },
     {
       id: "lastUsed",
       header: t("tokens.lastUsed"),
-      cell: (token) =>
-        token.lastUsedAt == null ? (
-          <span className={styles.never}>{t("tokens.neverUsed")}</span>
-        ) : (
-          dateTime.format(new Date(token.lastUsedAt))
-        ),
+      cell: (token) => (
+        <span className={styles.date}>
+          {named("tokens.lastUsed")}
+          {token.lastUsedAt == null ? <span className={styles.never}>{t("tokens.neverUsed")}</span> : when(token.lastUsedAt)}
+        </span>
+      ),
     },
     {
       id: "state",
       header: t("tokens.state"),
-      cell: (token) =>
-        token.revokedAt == null ? (
-          <Badge tone="accent">{t("tokens.active")}</Badge>
-        ) : (
-          <Badge tone="muted">{t("tokens.revoked")}</Badge>
-        ),
+      cell: (token) => (
+        <span className={styles.state}>
+          {token.revokedAt == null ? (
+            <Badge tone="accent">{t("tokens.active")}</Badge>
+          ) : (
+            <Badge tone="muted">{t("tokens.revoked")}</Badge>
+          )}
+        </span>
+      ),
     },
     {
       id: "actions",
       header: <span className={styles.visuallyHidden}>{t("tokens.actions")}</span>,
       align: "end",
-      cell: (token) => (token.revokedAt == null ? <RevokeToken token={token} returnFocus={listRef} /> : null),
+      cell: (token) =>
+        token.revokedAt == null ? (
+          <span className={styles.actions}>
+            <RevokeToken token={token} returnFocus={listRef} />
+          </span>
+        ) : null,
     },
   ];
 
@@ -70,7 +98,7 @@ function Tokens() {
       ) : tokens.data.length === 0 ? (
         <EmptyState title={t("tokens.empty")} body={t("tokens.emptyBody")} />
       ) : (
-        <div ref={listRef} tabIndex={-1}>
+        <div ref={listRef} tabIndex={-1} className={styles.keys}>
           <Table label={t("page.cabinet.title")} columns={columns} rows={tokens.data} rowKey={(token) => token.id} />
         </div>
       )}

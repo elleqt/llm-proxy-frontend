@@ -25,7 +25,8 @@
   background: var(--code);
   border: 1px solid var(--line);
   border-radius: 8px;
-  overflow-wrap: anywhere;
+  /* A secret has no words: break anywhere, not after the "sk-" hyphen. */
+  word-break: break-all;
   user-select: all;
   cursor: text;
 }
@@ -37,6 +38,8 @@
 
 .copy {
   flex: none;
+  /* Its own height, not the height of a value wrapped over several lines. */
+  align-self: flex-start;
   min-width: 7rem;
   padding: 0.4rem 0.9rem;
   font: inherit;

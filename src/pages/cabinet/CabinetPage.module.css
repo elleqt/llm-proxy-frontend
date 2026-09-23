@@ -61,3 +61,69 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.prefix {
+  white-space: nowrap;
+}
+
+/* Shown only in the narrow, one-card-per-key layout below. */
+.cellName {
+  display: none;
+}
+
+/*
+ * Narrow screens: each key is a small card instead of a table row, so the
+ * state and the Revoke button stay in view without scrolling sideways.
+ *   label ........ state
+ *   prefix
+ *   Created: date
+ *   Last used: date
+ *   ............ Revoke
+ */
+@media (max-width: 40rem) {
+  .keys thead {
+    display: none;
+  }
+
+  .keys tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.2rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .keys td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .keys td:empty {
+    display: none;
+  }
+
+  .keys td:has(.prefix),
+  .keys td:has(.date),
+  .keys td:has(.actions) {
+    grid-column: 1 / -1;
+  }
+
+  .keys td:has(.state) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .keys td:has(.date) {
+    font-size: 0.875rem;
+    color: var(--dim);
+  }
+
+  .keys .label {
+    font-weight: 600;
+  }
+
+  .cellName {
+    display: inline;
+  }
+}

@@ -11,6 +11,17 @@
   gap: 0 1rem;
 }
 
+/*
+ * Brand, navigation and switches need more than the 52rem reading column in
+ * Russian and for an administrator; where the window has room the header
+ * reaches past the column on both sides and stays on one row.
+ */
+@media (min-width: 68.75rem) {
+  .column > .header {
+    margin-inline: -7rem;
+  }
+}
+
 /* The switches, also when they wrap onto a row of their own: right, as on the instruction page. */
 .header > :last-child {
   margin-left: auto;
