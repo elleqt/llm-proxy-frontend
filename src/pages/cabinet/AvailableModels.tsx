@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { authConfigQuery } from "../../entities/session/authConfig";
 import { useMe } from "../../entities/user/me";
 import { myModelsQuery } from "../../entities/user/myModels";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
@@ -14,15 +13,11 @@ const CONFIRMATION_MS = 2000;
 export function AvailableModels() {
   const t = useT();
   const me = useMe().data;
-  const idp = me?.policySource === "idp";
-  const config = useQuery({ ...authConfigQuery, enabled: idp });
-  const provider = config.data?.oidc.displayName || t("access.providerFallback");
-
   return (
     <Card title={t("models.title")}>
       {me !== undefined && (
         <div className={styles.rules}>
-          <p>{idp ? fill(t("models.rulesIdp"), { provider }) : t("models.rulesLocal")}</p>
+          <p>{me.policySource === "idp" ? t("models.rulesIdp") : t("models.rulesLocal")}</p>
           {me.policy.length === 0 ? (
             <p className={styles.dim}>{t("models.noRules")}</p>
           ) : (

@@ -13,9 +13,6 @@ function cabinet(me: Schemas["Me"], providers: Schemas["Catalog"]["providers"]) 
     http.get("/api/me", ({ response }) => response(200).json(me)),
     http.get("/api/me/tokens", ({ response }) => response(200).json([])),
     http.get("/api/me/usage", ({ response }) => response(200).json(fixtures.usage())),
-    http.get("/api/auth/config", ({ response }) =>
-      response(200).json({ localLogin: false, oidc: { enabled: true, displayName: "Example ID" } }),
-    ),
     http.get("/api/me/models", ({ response }) => {
       asked.models += 1;
       return response(200).json({ providers });
@@ -37,7 +34,8 @@ describe("available models", () => {
     renderApp("/");
     const models = await section();
 
-    expect(await models.findByText(fill(en["models.rulesIdp"], { provider: "Example ID" }))).toBeInTheDocument();
+    expect(models.getByText(en["models.rulesIdp"])).toBeInTheDocument();
+    expect(models.queryByText(en["models.rulesLocal"])).not.toBeInTheDocument();
     expect(within(models.getByRole("list", { name: en["models.rules"] })).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       "chatgpt:*",
       "claude:claude-sonnet-*",
@@ -52,7 +50,9 @@ describe("available models", () => {
     cabinet(fixtures.me({ policy: ["claude:*"], policySource: "local" }), [{ name: "claude", models: ["claude-sonnet-5"] }]);
     renderApp("/");
 
-    expect((await section()).getByText(en["models.rulesLocal"])).toBeInTheDocument();
+    const models = await section();
+    expect(models.getByText(en["models.rulesLocal"])).toBeInTheDocument();
+    expect(models.queryByText(en["models.rulesIdp"])).not.toBeInTheDocument();
   });
 
   it("copies a model id", async () => {
