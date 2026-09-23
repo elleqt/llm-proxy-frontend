@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "test": "tsc -b && vitest run",
     "gen:api": "openapi-typescript api/openapi.yaml -o src/shared/api/schema.d.ts",
-    "sync:contract": "scripts/sync-contract.sh"
+    "sync:contract": "scripts/sync-contract.sh",
+    "e2e": "playwright test",
+    "e2e:stack": "scripts/e2e-stack.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "5.103.2",
@@ -23,6 +25,7 @@
     "uplot": "1.6.32"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
