@@ -21,8 +21,8 @@ const OPENAI_CODEX = [
 const omp = (providers?: string[]) => snippets("https://proxy.example/", "sk-test", "<model-id>", providers).omp;
 
 describe("the omp config", () => {
-  it("overrides omp's built-in providers exactly as a working config does", () => {
-    expect(omp(["chatgpt", "claude"])).toBe(`providers:\n${OPENAI_CODEX}\n${ANTHROPIC}`);
+  it("overrides omp's built-in providers exactly as a working config does, anthropic first", () => {
+    expect(omp(["chatgpt", "claude"])).toBe(`providers:\n${ANTHROPIC}\n${OPENAI_CODEX}`);
   });
 
   it("offers only the providers the user may use", () => {

@@ -35,8 +35,10 @@ const OMP_PROVIDERS: Record<string, (base: string, key: string) => string[]> = {
  */
 export function snippets(apiBaseURL: string, key: string, model: string, providers: readonly string[] = []): Snippets {
   const base = apiBaseURL.replace(/\/+$/, "");
-  const usable = providers.filter((name) => Object.hasOwn(OMP_PROVIDERS, name));
-  const omp = (usable.length > 0 ? usable : Object.keys(OMP_PROVIDERS)).flatMap((name) => OMP_PROVIDERS[name]!(base, key));
+  // In this file's order (anthropic first, as in a hand-written config), not the list's.
+  const known = Object.keys(OMP_PROVIDERS);
+  const usable = known.filter((name) => providers.includes(name));
+  const omp = (usable.length > 0 ? usable : known).flatMap((name) => OMP_PROVIDERS[name]!(base, key));
   return {
     claudeCode: [`export ANTHROPIC_BASE_URL="${base}"`, `export ANTHROPIC_AUTH_TOKEN="${key}"`, "claude"].join("\n"),
     omp: ["providers:", ...omp].join("\n"),
