@@ -1,0 +1,80 @@
+.column {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1rem;
+}
+
+/*
+ * Brand, navigation and switches need more than the 52rem reading column in
+ * Russian and for an administrator; where the window has room the header
+ * reaches past the column on both sides and stays on one row.
+ */
+@media (min-width: 68.75rem) {
+  .column > .header {
+    margin-inline: -7rem;
+  }
+}
+
+/* The switches, also when they wrap onto a row of their own: right, as on the instruction page. */
+.header > :last-child {
+  margin-left: auto;
+}
+
+.site {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* The context line above the page heading: small, dim, a plain link home. */
+.brand {
+  color: var(--dim);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--fg);
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  font-size: 0.875rem;
+}
+
+.link {
+  color: var(--dim);
+  text-decoration: none;
+}
+
+/* Sign-out reads as one more item of the line, not as a form button. */
+.signOut {
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0;
+  color: var(--dim);
+  background: none;
+  border: none;
+}
+
+.link:hover,
+.signOut:hover,
+.active {
+  color: var(--fg);
+}
+
+.active {
+  font-weight: 600;
+}

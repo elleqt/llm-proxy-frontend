@@ -1,0 +1,27 @@
+.chart {
+  width: 100%;
+  color: var(--fg);
+}
+
+/* uPlot's own stylesheet fixes these for a light page; take them from the tokens. */
+.chart :global(.u-legend) {
+  font-size: 0.85rem;
+  color: var(--fg);
+}
+
+.chart :global(.uplot .u-select) {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.chart :global(.uplot .u-cursor-x),
+.chart :global(.uplot .u-cursor-y) {
+  border-color: var(--dim);
+}
+
+.failed {
+  margin: 0;
+  padding: 1rem;
+  color: var(--dim);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}

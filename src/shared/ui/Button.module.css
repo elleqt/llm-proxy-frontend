@@ -1,0 +1,65 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.secondary {
+  color: var(--fg);
+  background: var(--panel);
+}
+
+.secondary:hover:not(:disabled, [aria-disabled="true"]) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.primary {
+  color: var(--panel);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.primary:hover:not(:disabled, [aria-disabled="true"]) {
+  background: color-mix(in srgb, var(--accent) 85%, var(--fg));
+}
+
+/* Destructive: heavier border and weight plus a glyph; reads the same in every theme and in greyscale. */
+.danger {
+  padding: calc(0.4rem - 1px) calc(0.9rem - 1px);
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--panel);
+  border: 2px solid var(--fg);
+}
+
+.danger:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--code);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

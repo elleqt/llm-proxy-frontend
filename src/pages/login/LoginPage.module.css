@@ -1,0 +1,16 @@
+.options {
+  max-width: 24rem;
+  margin-top: 1.25rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.or {
+  color: var(--dim);
+  font-size: 0.875rem;
+  margin: 1rem 0;
+}

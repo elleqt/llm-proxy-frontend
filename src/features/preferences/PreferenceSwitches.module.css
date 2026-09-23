@@ -1,0 +1,68 @@
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.group {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.caption {
+  color: var(--dim);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 0.25rem;
+}
+
+.button {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.3rem 0.6rem;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.button:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/*
+ * Narrow screens: the two groups stack; their captions share one width so the
+ * theme and language buttons start at the same line, and a group too long for
+ * the screen wraps its buttons under its own first button.
+ */
+@media (max-width: 30rem) {
+  .switches {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .group {
+    position: relative;
+    flex-wrap: wrap;
+    padding-left: 5.25rem;
+  }
+
+  .caption {
+    position: absolute;
+    left: 0;
+    top: 0.35rem;
+  }
+}
