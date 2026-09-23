@@ -158,6 +158,7 @@ export const ru: Messages = {
   "admin.invitationPending": "Приглашение действует до {time}",
   "admin.invitationLapsed": "Приглашение истекло",
   "admin.invitationNone": "Не связана с провайдером удостоверений.",
+  "admin.invite": "Пригласить войти через провайдера удостоверений",
   "admin.renewInvitation": "Обновить приглашение",
   "admin.invitationRenewed": "Приглашение отправлено: учётную запись займёт первый вход с адресом {email} через провайдера удостоверений.",
   "admin.nav": "Администрирование",

@@ -129,10 +129,8 @@ function Details({ user }: { user: AdminUser }) {
         </div>
       </dl>
       {user.mustChangePassword && <p className={styles.dim}>{t("admin.mustChangePassword")}</p>}
-      {/* A person invited through the identity provider and not linked yet can be re-invited — while that sign-in is on. */}
-      {oidc && human && user.email != null && !user.signIn.includes("oidc") && user.invitationExpiresAt != null && (
-        <Invitation user={user} />
-      )}
+      {/* A person not linked to the identity provider can be invited to sign in through it while that sign-in is on. */}
+      {oidc && human && user.email != null && !user.signIn.includes("oidc") && <Invitation user={user} />}
       <div className={styles.inlineForms}>
         <RoleForm user={user} />
         {/* Any person can be given a temporary password; a service account has none. */}
@@ -284,7 +282,8 @@ function UserTokens({ user }: { user: AdminUser }) {
       id: "prefix",
       header: t("tokens.prefix"),
       mono: true,
-      cell: (token) => <span className={styles.nowrap}>{token.prefix}…</span>,
+      // The prefix is all the server keeps: shown whole, as in the cabinet.
+      cell: (token) => <span className={styles.nowrap}>{token.prefix}</span>,
     },
     { id: "created", header: t("tokens.created"), cell: (token) => dateTime.format(new Date(token.createdAt)) },
     {

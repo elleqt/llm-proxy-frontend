@@ -158,6 +158,7 @@ export const en = {
   "admin.invitationPending": "Invitation pending until {time}",
   "admin.invitationLapsed": "Invitation lapsed",
   "admin.invitationNone": "Not linked to the identity provider.",
+  "admin.invite": "Invite to sign in with the identity provider",
   "admin.renewInvitation": "Renew invitation",
   "admin.invitationRenewed": "Invited: the first sign-in with {email} through the identity provider claims this account.",
   "admin.nav": "Administration",

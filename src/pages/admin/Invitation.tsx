@@ -15,7 +15,7 @@ export function InvitationState({ expiresAt }: { expiresAt: string }) {
   return <Badge tone="neutral">{fill(t("admin.invitationPending"), { time: until })}</Badge>;
 }
 
-/** The invitation line of a person's card, with "Renew invitation". */
+/** The invitation line of a person's card: "Invite…" with none pending, "Renew invitation" with one. */
 export function Invitation({ user }: { user: AdminUser }) {
   const t = useT();
   const errorMessage = useErrorMessage();
@@ -38,7 +38,7 @@ export function Invitation({ user }: { user: AdminUser }) {
         )}
       </p>
       <Button busy={renew.isPending} onClick={() => renew.mutate()}>
-        {t("admin.renewInvitation")}
+        {t(user.invitationExpiresAt == null ? "admin.invite" : "admin.renewInvitation")}
       </Button>
       {renew.isError && <p role="alert">{errorMessage(renew.error)}</p>}
       <p role="status" className={styles.dim}>

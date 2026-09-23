@@ -149,6 +149,7 @@ describe("keys and activity", () => {
 
     const key = (await screen.findByRole("cell", { name: "ci" })).closest("tr") as HTMLElement;
     expect(key).toHaveTextContent(en["tokens.neverUsed"]);
+    expect(within(key).getByRole("cell", { name: "sk-a1b2" })).toBeInTheDocument();
     const request = (await screen.findByRole("cell", { name: "claude:claude-sonnet-5" })).closest("tr") as HTMLElement;
     expect(request).toHaveTextContent("429");
     expect(request).toHaveTextContent("1,234");
@@ -211,8 +212,17 @@ describe("invitation", () => {
   });
 
   it.each([
+    ["an unlinked password account", fixtures.adminUser({ signIn: ["password"], invitationExpiresAt: null })],
+    ["an invitation used without a link", fixtures.adminUser({ signIn: [], invitationExpiresAt: null })],
+  ])("offers an invitation to %s while identity-provider sign-in is on", async (_, account) => {
+    card({ user: account });
+    renderApp(`/admin/users/${ID}`);
+    expect(await screen.findByRole("button", { name: en["admin.invite"] })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en["admin.renewInvitation"] })).not.toBeInTheDocument();
+  });
+
+  it.each([
     ["the identity provider is linked", { user: fixtures.adminUser({ signIn: ["oidc"], invitationExpiresAt: null }) }],
-    ["the person was never invited (password sign-in)", { user: fixtures.adminUser({ invitationExpiresAt: null }) }],
     ["identity-provider sign-in is off", { user: invited, oidc: false }],
   ])("is not offered when %s", async (_, options) => {
     card(options);
@@ -221,6 +231,7 @@ describe("invitation", () => {
     // The card has what it decides by: the account and whether that sign-in is on.
     await waitFor(() => expect(queryClient.getQueryData(authConfigQuery.queryKey)).toBeDefined());
     expect(screen.queryByRole("button", { name: en["admin.renewInvitation"] })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en["admin.invite"] })).not.toBeInTheDocument();
   });
 });
 
