@@ -101,4 +101,18 @@ describe("unwrap", () => {
     const error = await failure(unwrap(client.GET("/api/me")));
     expect(error).toMatchObject({ status: 502, code: UNKNOWN_ERROR });
   });
+
+  it("marks a body-less POST as JSON, as the API requires", async () => {
+    let contentType: string | null = null;
+    server.use(
+      http.post("/api/auth/logout", ({ request }) => {
+        contentType = request.headers.get("Content-Type");
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    await unwrap(client.POST("/api/auth/logout"));
+
+    expect(contentType).toBe("application/json");
+  });
 });

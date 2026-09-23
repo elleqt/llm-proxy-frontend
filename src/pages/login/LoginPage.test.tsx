@@ -144,7 +144,7 @@ describe("/login", () => {
     );
   });
 
-  it.each(["oidc_forbidden", "oidc_failed"] as const)("explains ?error=%s from the identity provider", async (code) => {
+  it.each(["oidc_forbidden", "oidc_failed", "rate_limited"] as const)("explains ?error=%s from the identity-provider routes", async (code) => {
     authConfig(both);
     renderApp(`/login?error=${code}`);
 

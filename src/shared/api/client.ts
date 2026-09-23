@@ -39,6 +39,19 @@ export const client = createClient<paths>({
   fetch: (request) => globalThis.fetch(request),
 });
 
+// The API requires a JSON content type on every POST, PUT and PATCH, including
+// those without a body (sign-out, password reset); openapi-fetch sets it only
+// when there is a body. DELETE is exempt.
+const JSON_METHODS = ["POST", "PUT", "PATCH"];
+client.use({
+  onRequest({ request }) {
+    if (JSON_METHODS.includes(request.method) && !request.headers.has("Content-Type")) {
+      request.headers.set("Content-Type", "application/json");
+    }
+    return request;
+  },
+});
+
 function toApiError(status: number, body: unknown): ApiError {
   const { code, field } = readErrorBody(body);
   if (status === 401) return new UnauthenticatedError(status, code, field);

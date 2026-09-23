@@ -10,8 +10,11 @@ import { fill } from "../../shared/lib/template";
 import { Button, ButtonLink, Spinner, TextField } from "../../shared/ui";
 import styles from "./LoginPage.module.css";
 
-/** The refusals the identity-provider callback sends back as `/login?error=<code>`. */
-const OIDC_ERRORS = ["oidc_forbidden", "oidc_failed"] as const;
+/**
+ * The refusals the identity-provider routes send back as `/login?error=<code>`.
+ * A redirect carries no Retry-After, so `rate_limited` gets its general text.
+ */
+const OIDC_ERRORS = ["oidc_forbidden", "oidc_failed", "rate_limited"] as const;
 
 /** The 429 refusals of sign-in; both say in `Retry-After` when to try again. */
 const RETRY_LATER = { locked_out: "login.lockedOutUntil", rate_limited: "login.rateLimitedUntil" } as const;
