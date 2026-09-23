@@ -13,12 +13,18 @@ export const stack = {
  */
 export function bootstrapPassword(): string {
   const project = process.env.E2E_COMPOSE_PROJECT;
-  const file = process.env.E2E_COMPOSE_FILE;
-  if (!project || !file) {
-    throw new Error("E2E_COMPOSE_PROJECT and E2E_COMPOSE_FILE must name the running compose stack");
+  const files = (process.env.E2E_COMPOSE_FILES || "").split(":").filter(Boolean);
+  if (!project || files.length === 0) {
+    throw new Error("E2E_COMPOSE_PROJECT and E2E_COMPOSE_FILES must name the running compose stack");
   }
   const envFile = process.env.E2E_COMPOSE_ENV_FILE;
-  const args = ["compose", "-p", project, "-f", file, ...(envFile ? ["--env-file", envFile] : [])];
+  const args = [
+    "compose",
+    "-p",
+    project,
+    ...files.flatMap((file) => ["-f", file]),
+    ...(envFile ? ["--env-file", envFile] : []),
+  ];
   const logs = execFileSync("docker", [...args, "logs", "--no-color", "--no-log-prefix", "backend"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
