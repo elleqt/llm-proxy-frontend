@@ -504,11 +504,21 @@ const handlers = [
       email,
       role: email.startsWith("admin") ? "admin" : "user",
       restricted: email.startsWith("temp"),
-      // "noaccess" in the address: no model allowed; "idp" too: the policy comes from groups.
-      policy: email.includes("noaccess") ? [] : ["claude:*"],
+      // "noaccess" in the address: no rules; "idp" too: the policy comes from groups.
+      // "nomatch": rules that match nothing in the catalogue.
+      policy: email.includes("noaccess") ? [] : email.includes("nomatch") ? ["mistral:*"] : ["claude:*", "chatgpt:gpt-6*"],
       policySource: email.includes("idp") ? "idp" : "local",
     };
     return response(200).json(me);
+  }),
+  http.get("/api/me/models", ({ response }) => {
+    if (me === null) return response.untyped(unauthenticated());
+    const covered = preview(me.policy).covered;
+    const providers = [...new Set(covered.map((entry) => entry.provider))].sort().map((name) => ({
+      name,
+      models: covered.filter((entry) => entry.provider === name).map((entry) => entry.model).sort(),
+    }));
+    return response(200).json({ providers });
   }),
   http.post("/api/auth/logout", () => {
     me = null;

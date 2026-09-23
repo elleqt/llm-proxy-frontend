@@ -7,6 +7,7 @@ import { RevokeToken } from "../../features/revoke-token/RevokeToken";
 import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
 import { Badge, Button, Card, Chart, EmptyState, Spinner, Table, type Column } from "../../shared/ui";
+import { AvailableModels } from "./AvailableModels";
 import styles from "./CabinetPage.module.css";
 
 export function CabinetPage() {
@@ -17,6 +18,7 @@ export function CabinetPage() {
       <NoModelAccessNotice />
       <div className={styles.sections}>
         <Tokens />
+        <AvailableModels />
         <UsageSection />
       </div>
     </>

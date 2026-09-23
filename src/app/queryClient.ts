@@ -1,5 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { meQuery } from "../entities/user/me";
+import { myModelsQuery } from "../entities/user/myModels";
 import { endSession, listenForSessionChanges, resetSession } from "../features/session/session";
 import { ApiError, PasswordChangeRequiredError, UnauthenticatedError } from "../shared/api/client";
 
@@ -42,10 +43,13 @@ export function createQueryClient(navigate: (to: "/login" | "/password") => void
       signedIn = undefined;
     } else if (event.type === "updated" && event.action.type === "success") {
       const id = (event.action.data as { id: string } | undefined)?.id;
-      const changed = signedIn !== undefined && id !== signedIn;
+      const refetched = signedIn !== undefined;
+      const changed = refetched && id !== signedIn;
       signedIn = id;
       // Deferred: the cache is mid-notification here.
       if (changed) queueMicrotask(() => resetSession(queryClient, { keepMe: true }));
+      // The same user again, perhaps with other rules: what they may use follows.
+      else if (refetched) queueMicrotask(() => void queryClient.invalidateQueries({ queryKey: myModelsQuery.queryKey }));
     }
   });
   listenForSessionChanges(queryClient);

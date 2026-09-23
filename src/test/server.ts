@@ -7,8 +7,16 @@ import type { components, paths } from "../shared/api/schema";
 /** MSW's `http`, typed by the contract: an unknown path or a wrong body fails the type check. */
 export const http = createOpenApiHttp<paths>({ baseUrl: location.origin });
 
-/** Tests register handlers per case with `server.use(...)`; unmatched requests fail. */
-export const server = setupServer();
+/**
+ * Tests register handlers per case with `server.use(...)`; unmatched requests
+ * fail. The one standing answer: the signed-in user may use some models, which
+ * every cabinet and connect screen asks. A test about that list overrides it.
+ */
+export const server = setupServer(
+  http.get("/api/me/models", ({ response }) =>
+    response(200).json({ providers: [{ name: "claude", models: ["claude-sonnet-5"] }] }),
+  ),
+);
 
 /**
  * An `Error` response for statuses the contract states once, as a convention

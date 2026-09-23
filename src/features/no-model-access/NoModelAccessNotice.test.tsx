@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { en } from "../../shared/i18n/en";
 import { fill } from "../../shared/lib/template";
@@ -54,6 +54,17 @@ describe("the no-model-access notice", () => {
     expect(notice).toHaveTextContent(en["access.askAdmin"]);
     expect(notice).not.toHaveTextContent(/groups/);
     expect(await screen.findByRole("button", { name: en["issue.open"] })).toBeEnabled();
+  });
+
+  it("says the rules match nothing when they exist but no model is available, on both pages", async () => {
+    signedIn(fixtures.me({ policy: ["mistral:*"], policySource: "local" }));
+    server.use(http.get("/api/me/models", ({ response }) => response(200).json({ providers: [] })));
+    await pageShown("/connect", en["page.connect.title"]);
+    await pageShown("/", en["page.cabinet.title"]);
+
+    await waitFor(() => expect(screen.getAllByText(en["access.noMatch"])).toHaveLength(2));
+    const notices = screen.getAllByText(en["access.noMatch"]);
+    for (const notice of notices) expect(notice).toHaveAttribute("role", "status");
   });
 
   it("is absent when the policy allows some model", async () => {
