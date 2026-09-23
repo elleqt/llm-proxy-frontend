@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { authConfigQuery } from "../../../entities/session/authConfig";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { cached } from "../../../test/cache";
@@ -15,6 +16,8 @@ interface Card {
   user?: Schemas["AdminUser"];
   tokens?: Schemas["Token"][];
   activity?: Schemas["Activity"];
+  /** Whether sign-in through the identity provider is on. */
+  oidc?: boolean;
   /** Coverage the preview answers with, per requested rule set. */
   preview?: (rules: string[]) => Schemas["PolicyPreview"];
 }
@@ -24,6 +27,7 @@ function card({
   user = fixtures.adminUser(),
   tokens = [],
   activity = { requests: [], audit: [] },
+  oidc = true,
   preview = () => ({ errors: [], covered: [] }),
 }: Card = {}) {
   const previews: string[][] = [];
@@ -32,6 +36,8 @@ function card({
     http.get("/api/admin/users/{userId}", ({ response }) => response(200).json(user)),
     http.get("/api/admin/users/{userId}/tokens", ({ response }) => response(200).json(tokens)),
     http.get("/api/admin/users/{userId}/activity", ({ response }) => response(200).json(activity)),
+    http.get("/api/auth/config", ({ response }) => response(200).json({ localLogin: true, oidc: { enabled: oidc } })),
+    http.get("/api/admin/users", ({ response }) => response(200).json([user])),
     http.get("/api/admin/catalog", ({ response }) => response(200).json(fixtures.catalog())),
     http.post("/api/admin/policy/preview", async ({ request, response }) => {
       const { rules } = await request.json();
@@ -127,7 +133,16 @@ describe("keys and activity", () => {
             latencyMs: 850,
           },
         ],
-        audit: [{ at: "2026-09-22T08:00:00Z", action: "token.revoke", target: "old-laptop", actorId: null }],
+        audit: [
+          { at: "2026-09-22T08:00:00Z", action: "token.revoke", target: "old-laptop", actorId: null },
+          { at: "2026-09-21T08:00:00Z", action: "user.policy.update", target: ID, actorId: null },
+          {
+            at: "2026-09-20T08:00:00Z",
+            action: "user.create",
+            target: "00000000-0000-4000-8000-00000000ffff",
+            actorId: null,
+          },
+        ],
       },
     });
     renderApp(`/admin/users/${ID}`);
@@ -140,6 +155,17 @@ describe("keys and activity", () => {
     expect(request).toHaveTextContent(fill(en["admin.ms"], { ms: 850 }));
     const audit = screen.getByRole("cell", { name: "token.revoke" }).closest("tr") as HTMLElement;
     expect(audit).toHaveTextContent("old-laptop");
+    // An account id reads as that account's name, linked to its card; an unknown one as a short id.
+    const policyRow = screen.getByRole("cell", { name: "user.policy.update" }).closest("tr") as HTMLElement;
+    expect(await within(policyRow).findByRole("link", { name: "Grace Example" })).toHaveAttribute(
+      "href",
+      `/admin/users/${ID}`,
+    );
+    const unknown = within(screen.getByRole("cell", { name: "user.create" }).closest("tr") as HTMLElement).getByRole(
+      "link",
+    );
+    expect(unknown).toHaveTextContent("00000000…");
+    expect(unknown).toHaveAttribute("title", "00000000-0000-4000-8000-00000000ffff");
   });
 });
 
@@ -184,10 +210,16 @@ describe("invitation", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(en["error.already_linked"]);
   });
 
-  it("is not offered once the identity provider is linked", async () => {
-    card({ user: fixtures.adminUser({ signIn: ["oidc"] }) });
-    renderApp(`/admin/users/${ID}`);
+  it.each([
+    ["the identity provider is linked", { user: fixtures.adminUser({ signIn: ["oidc"], invitationExpiresAt: null }) }],
+    ["the person was never invited (password sign-in)", { user: fixtures.adminUser({ invitationExpiresAt: null }) }],
+    ["identity-provider sign-in is off", { user: invited, oidc: false }],
+  ])("is not offered when %s", async (_, options) => {
+    card(options);
+    const { queryClient } = renderApp(`/admin/users/${ID}`);
     await screen.findByRole("heading", { level: 1, name: "Grace Example" });
+    // The card has what it decides by: the account and whether that sign-in is on.
+    await waitFor(() => expect(queryClient.getQueryData(authConfigQuery.queryKey)).toBeDefined());
     expect(screen.queryByRole("button", { name: en["admin.renewInvitation"] })).not.toBeInTheDocument();
   });
 });

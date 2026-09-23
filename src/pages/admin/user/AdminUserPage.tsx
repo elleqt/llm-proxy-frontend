@@ -9,6 +9,7 @@ import {
   type Activity,
   type AdminUser,
 } from "../../../entities/user/adminUsers";
+import { authConfigQuery } from "../../../entities/session/authConfig";
 import type { Token } from "../../../entities/token/tokens";
 import { PolicyEditor } from "../../../features/policy-editor/PolicyEditor";
 import { ApiError, client, unwrap } from "../../../shared/api/client";
@@ -98,6 +99,7 @@ function Details({ user }: { user: AdminUser }) {
   const [lang] = useLang();
   const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
   const human = user.kind === "human";
+  const oidc = useQuery(authConfigQuery).data?.oidc.enabled === true;
   return (
     <Card title={t("admin.account")} actions={<BlockToggle user={user} />}>
       <dl className={styles.details}>
@@ -127,8 +129,10 @@ function Details({ user }: { user: AdminUser }) {
         </div>
       </dl>
       {user.mustChangePassword && <p className={styles.dim}>{t("admin.mustChangePassword")}</p>}
-      {/* A person with no identity-provider link yet can be (re)invited to claim the account through it. */}
-      {human && !user.signIn.includes("oidc") && user.email != null && <Invitation user={user} />}
+      {/* A person invited through the identity provider and not linked yet can be re-invited — while that sign-in is on. */}
+      {oidc && human && user.email != null && !user.signIn.includes("oidc") && user.invitationExpiresAt != null && (
+        <Invitation user={user} />
+      )}
       <div className={styles.inlineForms}>
         <RoleForm user={user} />
         {/* Any person can be given a temporary password; a service account has none. */}
@@ -513,7 +517,7 @@ function UserActivity({ userId }: { userId: string }) {
   const auditColumns: Column<AuditRow>[] = [
     { id: "at", header: t("admin.at"), cell: (row) => dateTime.format(new Date(row.at)) },
     { id: "action", header: t("admin.action"), mono: true, cell: (row) => row.action },
-    { id: "target", header: t("admin.target"), mono: true, cell: (row) => row.target ?? "—" },
+    { id: "target", header: t("admin.target"), mono: true, cell: (row) => <AuditTarget target={row.target} /> },
   ];
 
   return (
@@ -549,5 +553,21 @@ function UserActivity({ userId }: { userId: string }) {
         </>
       )}
     </Card>
+  );
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** An audit target: an account id becomes that account's name, linked to its card. */
+function AuditTarget({ target }: { target: string | undefined }) {
+  const isAccount = target !== undefined && UUID.test(target);
+  const users = useQuery({ ...adminUsersQuery, enabled: isAccount });
+  if (target === undefined) return "—";
+  if (!isAccount) return target;
+  const account = users.data?.find((user) => user.id === target);
+  return (
+    <Link to={`/admin/users/${target}`} title={target}>
+      {account?.displayName ?? `${target.slice(0, 8)}…`}
+    </Link>
   );
 }
