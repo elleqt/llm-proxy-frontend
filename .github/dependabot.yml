@@ -1,0 +1,40 @@
+# Titles follow Conventional Commits: build(deps): ... and ci(deps): ....
+# Version updates, once a month and grouped, so they arrive as a few pull requests
+# rather than one per package. Major versions come one per pull request, since they
+# may need code changes. Security updates are separate: Dependabot opens those as
+# soon as an advisory is published.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      base-images:
+        patterns: ["*"]

@@ -109,6 +109,8 @@ Sign in as `admin@example.com` with the password `password` (any address works w
 
 There is no separate lint or format script; `tsc` runs as part of `npm test` and `npm run build`. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the build, the tests and the generated-types check. On a pull request it also builds the image for both platforms and checks the amd64 image's health and headers; on a push to `main` or a `v*` tag it publishes the image to Docker Hub and then smoke-tests what it pushed.
 
+Changes reach `main` only as pull requests, squash-merged after CI passes; direct pushes to `main` are refused. The PR title becomes the commit and must follow [Conventional Commits](https://www.conventionalcommits.org) (`fix(cabinet): ...`). The rules are the same in both repositories and are listed in the backend's [RELEASING.md](https://github.com/elleqt/llm-proxy-backend/blob/main/RELEASING.md#repository-rules). Security issues: [SECURITY.md](SECURITY.md), never a public issue.
+
 ## API contract
 
 [`api/openapi.yaml`](api/openapi.yaml) is the backend's contract, copied from the backend repository — the backend is its source of truth. To update it from a backend checkout next to this one (override with `BACKEND_DIR`):
