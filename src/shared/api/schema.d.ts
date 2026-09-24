@@ -998,8 +998,11 @@ export interface operations {
     oidcCallback: {
         parameters: {
             query: {
-                code: string;
+                /** @description Absent when the identity provider answers with `error`. */
+                code?: string;
                 state: string;
+                /** @description The identity provider's refusal (RFC 6749 §4.1.2.1), sent instead of `code`. `access_denied` carrying this login's `state` redirects with `oidc_forbidden`; any other value with `oidc_failed`. */
+                error?: string;
             };
             header?: never;
             path?: never;
