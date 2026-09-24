@@ -34,7 +34,7 @@ export const en = {
   "errorIn.password.invalid_credentials": "The current password is wrong.",
   "error.locked_out": "Too many failed attempts. Try again later.",
   "error.oidc_disabled": "Sign-in through the identity provider is turned off.",
-  "error.oidc_forbidden": "Your identity-provider account is not allowed to use this service.",
+  "error.oidc_forbidden": "You do not have access to this service. Ask an administrator to grant it.",
   "error.oidc_failed": "Sign-in through the identity provider failed. Try again.",
   "error.weak_password": "The password is too weak.",
   "error.empty_password": "Enter a password.",

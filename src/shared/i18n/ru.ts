@@ -34,7 +34,7 @@ export const ru: Messages = {
   "errorIn.password.invalid_credentials": "Текущий пароль неверен.",
   "error.locked_out": "Слишком много неудачных попыток. Попробуйте позже.",
   "error.oidc_disabled": "Вход через провайдера учётных записей отключён.",
-  "error.oidc_forbidden": "Вашей учётной записи у провайдера не разрешён доступ к сервису.",
+  "error.oidc_forbidden": "У вас нет доступа к этому сервису. Обратитесь к администратору.",
   "error.oidc_failed": "Не удалось войти через провайдера учётных записей. Попробуйте ещё раз.",
   "error.weak_password": "Пароль слишком простой.",
   "error.empty_password": "Введите пароль.",
