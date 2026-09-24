@@ -14,3 +14,14 @@
   font-size: 0.875rem;
   margin: 1rem 0;
 }
+
+/* The page's refusals: bold with the accent ⚠, as field errors are (no red in the palette). */
+.error {
+  max-width: 24rem;
+  font-weight: 600;
+}
+
+.error::before {
+  content: "⚠ ";
+  color: var(--accent);
+}

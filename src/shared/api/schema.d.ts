@@ -62,7 +62,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Identity-provider redirect target. On success sets the session cookie and redirects to `/`; on refusal redirects to `/login?error=<code>` with one of `oidc_forbidden`, `oidc_failed`. */
+        /** Identity-provider redirect target. On success sets the session cookie and redirects to `/`; on refusal redirects to `/login?error=<code>` with one of `oidc_forbidden` (the identity provider, e.g. answering `error=access_denied`, or this service refused access), `oidc_failed`, `rate_limited`. */
         get: operations["oidcCallback"];
         put?: never;
         post?: never;

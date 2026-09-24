@@ -13,6 +13,8 @@ import styles from "./LoginPage.module.css";
 /**
  * The refusals the identity-provider routes send back as `/login?error=<code>`.
  * A redirect carries no Retry-After, so `rate_limited` gets its general text.
+ * Any other code gets `oidc_failed`'s text: only those routes redirect here with
+ * `?error=`, and the page never shows the raw code.
  */
 const OIDC_ERRORS = ["oidc_forbidden", "oidc_failed", "rate_limited"] as const;
 
@@ -48,16 +50,24 @@ export function LoginPage() {
   const config = useQuery(authConfigQuery);
   const errorMessage = useErrorMessage();
   const [params] = useSearchParams();
-  const oidcError = OIDC_ERRORS.find((code) => code === params.get("error"));
+  const errorParam = params.get("error");
+  const oidcError =
+    errorParam === null ? null : (OIDC_ERRORS.find((code) => code === errorParam) ?? "oidc_failed");
 
   return (
     <>
       <h1>{t("page.login.title")}</h1>
-      {oidcError !== undefined && <p role="alert">{t(`error.${oidcError}`)}</p>}
+      {oidcError !== null && (
+        <p role="alert" className={styles.error}>
+          {t(`error.${oidcError}`)}
+        </p>
+      )}
       {config.isPending ? (
         <Spinner label={t("app.loading")} />
       ) : config.isError ? (
-        <p role="alert">{errorMessage(config.error)}</p>
+        <p role="alert" className={styles.error}>
+          {errorMessage(config.error)}
+        </p>
       ) : (
         <div className={styles.options}>
           {config.data.localLogin && <LoginForm />}
@@ -135,7 +145,11 @@ function LoginForm() {
         value={password}
         onChange={(event) => setPassword(event.target.value)}
       />
-      {failure !== null && <p role="alert">{failure}</p>}
+      {failure !== null && (
+        <p role="alert" className={styles.error}>
+          {failure}
+        </p>
+      )}
       <div>
         <Button type="submit" variant="primary" busy={login.isPending}>
           {t("login.submit")}
