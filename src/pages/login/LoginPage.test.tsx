@@ -189,7 +189,9 @@ describe("/login", () => {
     authConfig(both);
     renderApp("/login?error=surprise");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(en["error.oidc_failed"]);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(en["error.oidc_failed"]);
+    expect(alert).not.toHaveTextContent("surprise");
   });
 });
 
