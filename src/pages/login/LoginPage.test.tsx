@@ -184,6 +184,15 @@ describe("/login", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(en[`error.${code}`]);
   });
+
+  it("falls back to the generic sign-in failure for an unknown ?error code", async () => {
+    authConfig(both);
+    renderApp("/login?error=surprise");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(en["error.oidc_failed"]);
+    expect(alert).not.toHaveTextContent("surprise");
+  });
 });
 
 /**

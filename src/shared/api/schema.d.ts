@@ -62,7 +62,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Identity-provider redirect target. On success sets the session cookie and redirects to `/`; on refusal redirects to `/login?error=<code>` with one of `oidc_forbidden`, `oidc_failed`. */
+        /** Identity-provider redirect target. On success sets the session cookie and redirects to `/`; on refusal redirects to `/login?error=<code>` with one of `oidc_forbidden` (the identity provider, e.g. answering `error=access_denied`, or this service refused access), `oidc_failed`, `rate_limited`. */
         get: operations["oidcCallback"];
         put?: never;
         post?: never;
@@ -998,8 +998,11 @@ export interface operations {
     oidcCallback: {
         parameters: {
             query: {
-                code: string;
+                /** @description Absent when the identity provider answers with `error`. */
+                code?: string;
                 state: string;
+                /** @description The identity provider's refusal (RFC 6749 §4.1.2.1), sent instead of `code`. `access_denied` carrying this login's `state` redirects with `oidc_forbidden`; any other value with `oidc_failed`. */
+                error?: string;
             };
             header?: never;
             path?: never;
