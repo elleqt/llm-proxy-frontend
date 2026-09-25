@@ -244,6 +244,11 @@ function YamlEditor({ value, onChange }: { value: string; onChange: (value: stri
       <p id={`${id}-hint`} className={styles.dim}>
         {t("settings.yamlHint")}
       </p>
+      <p className={styles.dim}>
+        <a href="https://help.router-for.me/configuration/basic" target="_blank" rel="noreferrer">
+          {t("settings.yamlDocs")}
+        </a>
+      </p>
     </div>
   );
 }

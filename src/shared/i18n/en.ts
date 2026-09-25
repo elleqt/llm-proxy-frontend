@@ -354,6 +354,7 @@ export const en = {
   "settings.wholeNumber": "Enter a whole number, 0 or more.",
   "settings.yamlLabel": "Configuration",
   "settings.yamlHint": "The whole editable part of the configuration. Fields the gateway owns are not here and cannot be set.",
+  "settings.yamlDocs": "CLIProxyAPI configuration reference",
   "settings.checkHint": "Check validates the change on the server and shows what would change. Nothing is applied until you apply it.",
   "settings.check": "Check",
   "settings.apply": "Apply…",
