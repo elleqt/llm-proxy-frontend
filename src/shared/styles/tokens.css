@@ -2,21 +2,25 @@
   color-scheme: light;
   --bg: #f6f7f9; --panel: #ffffff; --line: #dfe3e8; --fg: #1b1f24;
   --dim: #5c636b; --accent: #2f5fd0; --code: #f0f2f5;
+  --string: #1a7f37; --number: #8250df; --removed: #cf222e;
 }
 html[data-theme="pink"] {
   color-scheme: light;
   --bg: #fff4f8; --panel: #ffffff; --line: #f7cddf; --fg: #3a1f2b;
   --dim: #8b5f73; --accent: #d6336c; --code: #fdeaf2;
+  --string: #2f9e44; --number: #ae3ec9; --removed: #e03131;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #101214; --panel: #171a1d; --line: #262b30; --fg: #d7dbdf;
   --dim: #8b949e; --accent: #7aa2f7; --code: #0c0e10;
+  --string: #9ece6a; --number: #bb9af7; --removed: #f7768e;
 }
 @media (prefers-color-scheme: dark) {
   html[data-theme="auto"] {
     color-scheme: dark;
     --bg: #101214; --panel: #171a1d; --line: #262b30; --fg: #d7dbdf;
     --dim: #8b949e; --accent: #7aa2f7; --code: #0c0e10;
+    --string: #9ece6a; --number: #bb9af7; --removed: #f7768e;
   }
 }

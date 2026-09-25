@@ -1,0 +1,103 @@
+/* The frame scrolls; the text area inside grows with the text, never scrolls itself. */
+.editor {
+  --gutter: 3.25em;
+  max-height: 40rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.editor:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stack {
+  position: relative;
+  min-height: 21rem;
+}
+
+/* The colored copy and the text area must lay text out identically, or the caret drifts off what it edits. */
+.highlight,
+.input {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  letter-spacing: inherit;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  border: 0;
+  border-radius: 0;
+}
+
+.highlight {
+  position: relative;
+  overflow: visible;
+  background: none;
+  pointer-events: none;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding-left: calc(0.75rem + var(--gutter));
+  overflow: hidden;
+  resize: none;
+  color: inherit;
+  background: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--fg);
+  outline: none;
+}
+
+.input::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.line {
+  position: relative;
+  display: block;
+  padding-left: var(--gutter);
+}
+
+.lineNo {
+  position: absolute;
+  left: 0;
+  width: calc(var(--gutter) - 0.75em);
+  text-align: right;
+  color: var(--dim);
+  user-select: none;
+}
+
+.highlight :global(.token.key) {
+  color: var(--accent);
+}
+
+.highlight :global(.token.string) {
+  color: var(--string);
+}
+
+.highlight :global(.token.number),
+.highlight :global(.token.boolean),
+.highlight :global(.token.null) {
+  color: var(--number);
+}
+
+.highlight :global(.token.comment) {
+  font-style: italic;
+  color: var(--dim);
+}
+
+.highlight :global(.token.punctuation) {
+  color: var(--dim);
+}
