@@ -110,6 +110,14 @@ jobs:
             org.opencontainers.image.title=llm-proxy-frontend
             org.opencontainers.image.description=Web interface of llm-proxy: user cabinet and admin panel, served by unprivileged nginx.
             org.opencontainers.image.licenses=MIT
+      - id: version
+        name: Compute UI version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=edge-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          fi
       - id: build
         name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -120,6 +128,8 @@ jobs:
           sbom: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # Each platform runs by its own manifest digest from the pushed index: the

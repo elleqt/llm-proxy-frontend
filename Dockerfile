@@ -7,6 +7,9 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Version shown in the UI footer; CI passes the tag / edge-<sha>. "dev" for local builds.
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=$APP_VERSION
 RUN npm run build \
  && node nginx/csp-hash.mjs dist/index.html nginx/default.conf.template /tmp/default.conf.template
 
