@@ -4,7 +4,7 @@ import { settingsQuery, type Settings, type SettingsUpdateRequest } from "../../
 import { ApiError, client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
-import { Button, Card, Spinner, Tabs, TextField } from "../../../shared/ui";
+import { Button, Card, CodeEditor, CopyButton, DiffView, Spinner, Tabs, TextField } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Prices } from "./Prices";
 import styles from "../admin.module.css";
@@ -202,7 +202,7 @@ function SettingsEditor({ settings }: { settings: Settings }) {
       {diff !== null && (
         <section aria-label={t("settings.diff")}>
           <h3>{t("settings.diff")}</h3>
-          {diff === "" ? <p>{t("settings.noChanges")}</p> : <pre className={styles.diff}>{diff}</pre>}
+          {diff === "" ? <p>{t("settings.noChanges")}</p> : <DiffView text={diff} />}
         </section>
       )}
       {confirming && diff !== null && (
@@ -211,7 +211,7 @@ function SettingsEditor({ settings }: { settings: Settings }) {
           body={
             <>
               <p>{t("settings.applyBody")}</p>
-              <pre className={styles.diff}>{diff}</pre>
+              <DiffView text={diff} />
             </>
           }
           confirmLabel={t("settings.applyConfirm")}
@@ -234,18 +234,13 @@ function YamlEditor({ value, onChange }: { value: string; onChange: (value: stri
   const id = useId();
   return (
     <div className={styles.yaml}>
-      <label htmlFor={id} className={styles.label}>
-        {t("settings.yamlLabel")}
-      </label>
-      <textarea
-        id={id}
-        value={value}
-        rows={16}
-        spellCheck={false}
-        aria-describedby={`${id}-hint`}
-        className={styles.textarea}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <div className={styles.yamlHead}>
+        <label htmlFor={id} className={styles.label}>
+          {t("settings.yamlLabel")}
+        </label>
+        <CopyButton value={value} />
+      </div>
+      <CodeEditor id={id} value={value} describedBy={`${id}-hint`} onChange={onChange} />
       <p id={`${id}-hint`} className={styles.dim}>
         {t("settings.yamlHint")}
       </p>

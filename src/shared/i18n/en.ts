@@ -57,6 +57,7 @@ export const en = {
   "ui.copy": "Copy",
   "ui.copied": "Copied",
   "ui.copyFailed": "Could not copy automatically. The value is selected: copy it with Ctrl+C (⌘C on a Mac).",
+  "ui.copyFailedManual": "Could not copy automatically. Select the text and copy it with Ctrl+C (⌘C on a Mac).",
   "ui.shownOnce": "Save it now: it will not be shown again.",
   "ui.close": "Close",
   "ui.dismiss": "Dismiss",

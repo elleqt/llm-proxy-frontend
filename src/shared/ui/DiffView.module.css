@@ -1,0 +1,24 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.diff {
+  margin: 0;
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre;
+}
+
+.diff :global(.token.inserted) {
+  color: var(--string);
+}
+
+.diff :global(.token.deleted) {
+  color: var(--removed);
+}
+
+.diff :global(.token.coord) {
+  color: var(--dim);
+}

@@ -67,6 +67,18 @@ describe("gateway settings", () => {
     expect(updates[2]).toEqual({ fields: { proxyURL: "", requestRetry: 5, maxRetryInterval: 30 }, dryRun: false });
   });
 
+  it("copies the YAML as edited", async () => {
+    settingsScreen();
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+
+    await user.click(await screen.findByRole("tab", { name: en["settings.yaml"] }));
+    await user.type(screen.getByLabelText(en["settings.yamlLabel"]), "port: 1");
+    await user.click(screen.getByRole("button", { name: en["ui.copy"] }));
+
+    await expect(navigator.clipboard.readText()).resolves.toBe(`${SETTINGS.yaml}port: 1`);
+  });
+
   it("names the field a forbidden_setting refusal is about", async () => {
     settingsScreen();
     server.use(

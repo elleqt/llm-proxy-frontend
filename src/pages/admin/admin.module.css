@@ -221,27 +221,11 @@
   font-weight: 600;
 }
 
-.textarea {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  padding: 0.6rem 0.75rem;
-  color: var(--fg);
-  background: var(--code);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  resize: vertical;
-}
-
-.textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.diff {
-  max-height: 24rem;
-  overflow: auto;
-  white-space: pre;
+.yamlHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 
 .visuallyHidden {

@@ -3,7 +3,10 @@ export { Button, ButtonLink, type ButtonLinkProps, type ButtonProps } from "./Bu
 export { Card, type CardProps } from "./Card";
 export { Chart, type ChartProps, type ChartSeries } from "./Chart";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
+export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
+export { CopyButton, type CopyButtonProps } from "./CopyButton";
 export { CopyField, type CopyFieldProps } from "./CopyField";
+export { DiffView, type DiffViewProps } from "./DiffView";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { Modal, type ModalProps } from "./Modal";
 export { Select, type SelectOption, type SelectProps } from "./Select";
