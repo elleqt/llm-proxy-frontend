@@ -79,6 +79,19 @@ describe("gateway settings", () => {
     await expect(navigator.clipboard.readText()).resolves.toBe(`${SETTINGS.yaml}port: 1`);
   });
 
+  it("links the CLIProxyAPI configuration reference from the YAML tab", async () => {
+    settingsScreen();
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+
+    await user.click(await screen.findByRole("tab", { name: en["settings.yaml"] }));
+
+    expect(screen.getByRole("link", { name: en["settings.yamlDocs"] })).toHaveAttribute(
+      "href",
+      "https://help.router-for.me/configuration/basic",
+    );
+  });
+
   it("names the field a forbidden_setting refusal is about", async () => {
     settingsScreen();
     server.use(
