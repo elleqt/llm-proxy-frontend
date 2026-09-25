@@ -1,5 +1,5 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { en } from "../shared/i18n/en";
 import { renderApp } from "../test/render";
 import { fixtures, http, server, type Schemas } from "../test/server";
@@ -58,5 +58,20 @@ describe("header navigation", () => {
     expect(screen.queryByRole("navigation", { name: en["nav.label"] })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: en["app.name"] })).toHaveAttribute("href", "/");
     expect(meRequests).toBe(0);
+  });
+});
+
+describe("footer", () => {
+  // restoreMocks does not cover env stubs.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("shows the build version in the footer", async () => {
+    vi.stubEnv("VITE_APP_VERSION", "1.2.3");
+    signedIn(fixtures.me());
+    renderApp("/connect");
+
+    expect(await screen.findByRole("contentinfo")).toHaveTextContent("1.2.3");
   });
 });

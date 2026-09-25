@@ -4,6 +4,7 @@ import { meQuery } from "../entities/user/me";
 import { PreferenceSwitches } from "../features/preferences/PreferenceSwitches";
 import { SignOutButton } from "../features/session/SignOutButton";
 import { useT } from "../shared/i18n";
+import { appVersion } from "../shared/lib/version";
 import styles from "./Layout.module.css";
 
 export function Layout() {
@@ -24,9 +25,13 @@ export function Layout() {
         </div>
         <PreferenceSwitches />
       </header>
-      <main>
+      <main className={styles.main}>
         <Outlet />
       </main>
+      <footer className={styles.footer}>
+        {t("app.name")}
+        <code>{appVersion()}</code>
+      </footer>
     </div>
   );
 }
