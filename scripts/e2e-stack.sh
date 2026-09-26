@@ -7,8 +7,9 @@
 # The stack is the backend's docker-compose.yml (published images) with its
 # docker-compose.build.yml (source builds) on top, plus a throwaway override
 # that builds the frontend from this checkout, gives both images names of this
-# run's own and replaces the compose file's placeholder database password with a
-# random one. Everything else, the bootstrap administrator's email included, is
+# run's own and replaces the compose file's placeholder database password and
+# credentials key with random ones (the backend refuses to start on the
+# placeholder key). Everything else, the bootstrap administrator's email included, is
 # the compose file's own value. Published images are never pulled: the run tests
 # this working tree and the backend checkout beside it.
 #
@@ -37,9 +38,12 @@ export E2E_COMPOSE_PROJECT="${E2E_COMPOSE_PROJECT:-llmproxy-e2e}"
 backend_image="$E2E_COMPOSE_PROJECT-backend:e2e"
 frontend_image="$E2E_COMPOSE_PROJECT-frontend:e2e"
 
-# A throwaway database password for a stack that lives only for this run.
+# A throwaway database password and credentials key for a stack that lives only
+# for this run. The key seals vendor credentials in the database; the stack starts
+# with none, and the backend refuses the compose file's placeholder.
 workdir="$(mktemp -d)"
 db_password="$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')"
+credentials_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 override="$workdir/docker-compose.e2e.yml"
 cat >"$override" <<EOF
 services:
@@ -52,6 +56,7 @@ services:
     pull_policy: build
     environment:
       PGPASSWORD: "$db_password"
+      LLMPROXY_CREDENTIALS_KEY: "$credentials_key"
   frontend:
     image: $frontend_image
     build: {context: "$frontend"}
