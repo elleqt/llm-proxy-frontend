@@ -8,10 +8,10 @@
 # docker-compose.build.yml (source builds) on top, plus a throwaway override
 # that builds the frontend from this checkout, gives both images names of this
 # run's own and replaces the compose file's placeholder database password and
-# credentials key with random ones (the backend refuses to start on the
-# placeholder key). Everything else, the bootstrap administrator's email included, is
-# the compose file's own value. Published images are never pulled: the run tests
-# this working tree and the backend checkout beside it.
+# credentials key with random ones (the placeholders work, but are public).
+# Everything else, the bootstrap administrator's email included, is the compose
+# file's own value. Published images are never pulled: the run tests this working
+# tree and the backend checkout beside it.
 #
 # Prerequisites:
 #   - Docker with the compose plugin (v2), and ports 8080 and 8081 free: the
@@ -40,7 +40,7 @@ frontend_image="$E2E_COMPOSE_PROJECT-frontend:e2e"
 
 # A throwaway database password and credentials key for a stack that lives only
 # for this run. The key seals vendor credentials in the database; the stack starts
-# with none, and the backend refuses the compose file's placeholder.
+# with none, and a random key keeps the backend's placeholder warning out of its log.
 workdir="$(mktemp -d)"
 db_password="$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')"
 credentials_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
