@@ -8,7 +8,7 @@ import { fixtures, http, server, type Schemas } from "../../../test/server";
 
 const SETTINGS: Schemas["Settings"] = {
   yaml: "request-retry: 3\nmax-retry-interval: 30\n",
-  fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30 },
+  fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30, sessionAffinity: true },
 };
 const DIFF = "-request-retry: 3\n+request-retry: 5\n";
 
@@ -47,7 +47,9 @@ describe("gateway settings", () => {
     await user.click(screen.getByRole("button", { name: en["settings.check"] }));
 
     expect(await screen.findByRole("region", { name: en["settings.diff"] })).toHaveTextContent("+request-retry: 5");
-    expect(updates).toEqual([{ fields: { proxyURL: "", requestRetry: 5, maxRetryInterval: 30 }, dryRun: true }]);
+    expect(updates).toEqual([
+      { fields: { proxyURL: "", requestRetry: 5, maxRetryInterval: 30, sessionAffinity: true }, dryRun: true },
+    ]);
 
     // An edit after the check is unchecked: it cannot be applied.
     await user.type(retries, "0");
@@ -64,7 +66,28 @@ describe("gateway settings", () => {
     await user.click(within(dialog).getByRole("button", { name: en["settings.applyConfirm"] }));
 
     expect(await screen.findByText(en["settings.applied"])).toBeInTheDocument();
-    expect(updates[2]).toEqual({ fields: { proxyURL: "", requestRetry: 5, maxRetryInterval: 30 }, dryRun: false });
+    expect(updates[2]).toEqual({
+      fields: { proxyURL: "", requestRetry: 5, maxRetryInterval: 30, sessionAffinity: true },
+      dryRun: false,
+    });
+  });
+
+  it("turns sticky sessions off through the same check and apply", async () => {
+    const { updates } = settingsScreen();
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+
+    const sticky = await screen.findByRole("switch", { name: en["settings.sessionAffinity"] });
+    expect(sticky).toBeChecked();
+    await user.click(sticky);
+    expect(sticky).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: en["settings.check"] }));
+
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]).toEqual({
+      fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30, sessionAffinity: false },
+      dryRun: true,
+    });
   });
 
   it("copies the YAML as edited", async () => {

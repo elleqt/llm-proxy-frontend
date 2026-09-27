@@ -4,7 +4,7 @@ import { settingsQuery, type Settings, type SettingsUpdateRequest } from "../../
 import { ApiError, client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
-import { Button, Card, CodeEditor, CopyButton, DiffView, Spinner, Tabs, TextField } from "../../../shared/ui";
+import { Button, Card, CodeEditor, CopyButton, DiffView, Spinner, Tabs, TextField, Toggle } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Prices } from "./Prices";
 import styles from "../admin.module.css";
@@ -56,6 +56,8 @@ function SettingsEditor({ settings }: { settings: Settings }) {
   const [mode, setMode] = useState<"fields" | "yaml">("fields");
   const [fields, setFields] = useState(() => fieldValues(settings));
   const [yaml, setYaml] = useState(settings.yaml);
+  // On unless the document turns it off; the server says which.
+  const [sticky, setSticky] = useState(settings.fields.sessionAffinity ?? true);
   const [checked, setChecked] = useState<{ key: string; diff: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -71,7 +73,14 @@ function SettingsEditor({ settings }: { settings: Settings }) {
       ? { yaml }
       : retry === undefined || interval === undefined
         ? null
-        : { fields: { proxyURL: fields.proxyURL.trim(), requestRetry: retry, maxRetryInterval: interval } };
+        : {
+            fields: {
+              proxyURL: fields.proxyURL.trim(),
+              requestRetry: retry,
+              maxRetryInterval: interval,
+              sessionAffinity: sticky,
+            },
+          };
   const bodyKey = JSON.stringify(body);
 
   const put = useMutation({
@@ -96,6 +105,7 @@ function SettingsEditor({ settings }: { settings: Settings }) {
         onSuccess: (result) => {
           queryClient.setQueryData(settingsQuery.queryKey, result.settings);
           setFields(fieldValues(result.settings));
+          setSticky(result.settings.fields.sessionAffinity ?? true);
           setYaml(result.settings.yaml);
           setChecked(null);
           setConfirming(false);
@@ -168,6 +178,17 @@ function SettingsEditor({ settings }: { settings: Settings }) {
                   }}
                   error={onField("maxRetryInterval")}
                 />
+                <div>
+                  <Toggle
+                    label={t("settings.sessionAffinity")}
+                    checked={sticky}
+                    onChange={(on) => {
+                      edit();
+                      setSticky(on);
+                    }}
+                  />
+                  <p className={styles.dim}>{t("settings.sessionAffinityHint")}</p>
+                </div>
               </div>
             ),
           },

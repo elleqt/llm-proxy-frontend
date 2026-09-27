@@ -311,16 +311,20 @@ const LOGIN_LIFETIME_MS = 3 * 60_000;
 
 let settings: Schemas["Settings"] = {
   yaml: 'proxy-url: ""\nrequest-retry: 3\nmax-retry-interval: 30\nrouting:\n  strategy: round-robin\n',
-  fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30 },
+  fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30, sessionAffinity: true },
 };
 /** Keys the gateway owns: the mock refuses them like the backend does. */
 const OWNED_SETTINGS = ["port", "host", "auth-dir", "remote-management", "api-keys"];
 
 function yamlWith(fields: NonNullable<Schemas["Settings"]["fields"]>): string {
-  return settings.yaml
+  const yaml = settings.yaml
     .replace(/^proxy-url: .*$/m, `proxy-url: ${JSON.stringify(fields.proxyURL ?? "")}`)
     .replace(/^request-retry: .*$/m, `request-retry: ${fields.requestRetry ?? 0}`)
     .replace(/^max-retry-interval: .*$/m, `max-retry-interval: ${fields.maxRetryInterval ?? 0}`);
+  const sticky = `  session-affinity: ${fields.sessionAffinity ?? true}`;
+  return /^ {2}session-affinity: .*$/m.test(yaml)
+    ? yaml.replace(/^ {2}session-affinity: .*$/m, sticky)
+    : yaml.replace(/^routing:\n/m, `routing:\n${sticky}\n`);
 }
 
 function fieldsOf(yaml: string): Schemas["Settings"]["fields"] {
@@ -329,6 +333,8 @@ function fieldsOf(yaml: string): Schemas["Settings"]["fields"] {
     proxyURL: JSON.parse(read("proxy-url") ?? '""') as string,
     requestRetry: Number(read("request-retry") ?? 0),
     maxRetryInterval: Number(read("max-retry-interval") ?? 0),
+    // On unless the document turns it off, as the backend reads it.
+    sessionAffinity: read(" {2}session-affinity") !== "false",
   };
 }
 
@@ -766,6 +772,58 @@ const handlers = [
   http.delete("/api/admin/providers/{accountId}", ({ params }) => {
     accounts = accounts.filter((a) => a.id !== params.accountId);
     return new HttpResponse(null, { status: 204 });
+  }),
+  http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+    const { baseURL, apiKey } = await request.json();
+    if (!/^https?:\/\/[^/]/.test(baseURL)) {
+      return response(422).json({ code: "invalid_input", message: "", field: "baseURL" });
+    }
+    if (apiKey === "bad") return response(422).json({ code: "provider_auth_failed", message: "", field: "apiKey" });
+    const served = new Set(accounts.flatMap((a) => a.compat?.models.map((m) => m.alias ?? m.name) ?? []));
+    const models = ["deepseek-chat", "deepseek-reasoner", "llama3.1:8b"];
+    return response(200).json({
+      models,
+      conflicts: Object.fromEntries(models.filter((m) => served.has(m)).map((m) => [m, ["mock-compat"]])),
+    });
+  }),
+  http.post("/api/admin/providers/compat", async ({ request, response }) => {
+    const body = await request.json();
+    const id = `openai-compatible-${body.name}`;
+    if (accounts.some((a) => a.id === id)) {
+      return response(409).json({ code: "conflict", message: "", field: "name" });
+    }
+    const account: Schemas["ProviderAccount"] = {
+      id,
+      provider: body.name,
+      label: body.name,
+      email: null,
+      status: "active",
+      disabled: false,
+      lastError: null,
+      lastRefreshedAt: null,
+      quota: [],
+      compat: {
+        name: body.name,
+        baseURL: body.baseURL.replace(/\/+$/, ""),
+        ...(body.prefix === undefined ? {} : { prefix: body.prefix }),
+        hasApiKey: (body.apiKey ?? "") !== "",
+        models: body.models,
+      },
+    };
+    accounts = [...accounts, account];
+    return response(201).json(account);
+  }),
+  http.put("/api/admin/providers/compat/{accountId}", async ({ params, request, response }) => {
+    const body = await request.json();
+    const account = accounts.find((a) => a.id === params.accountId);
+    if (account?.compat === undefined) return response.untyped(notFound());
+    const hasApiKey = body.apiKey !== undefined ? body.apiKey !== "" : body.clearApiKey ? false : account.compat.hasApiKey;
+    const updated: Schemas["ProviderAccount"] = {
+      ...account,
+      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models: body.models },
+    };
+    accounts = accounts.map((a) => (a.id === account.id ? updated : a));
+    return response(200).json(updated);
   }),
   http.get("/api/admin/settings", ({ response }) => response(200).json(settings)),
   http.put("/api/admin/settings", async ({ request, response }) => {

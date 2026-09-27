@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
+import { AddCompatProvider, EditCompatProvider } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
@@ -38,12 +39,17 @@ export function AdminProvidersPage() {
       id: "name",
       header: t("providers.account"),
       sortValue: (a) => accountName(a),
-      // A long address wraps anywhere rather than widening the table.
-      cell: (a) => (
-        <span className={styles.accountName} title={accountName(a)}>
-          {accountName(a)}
-        </span>
-      ),
+      // A long address wraps anywhere rather than widening the table. An
+      // OpenAI-compatible provider is named by its provider column; its base
+      // URL says where it goes.
+      cell: (a) => {
+        const shown = a.compat?.baseURL ?? accountName(a);
+        return (
+          <span className={styles.accountName} title={shown}>
+            {shown}
+          </span>
+        );
+      },
     },
     {
       id: "status",
@@ -137,6 +143,7 @@ export function AdminProvidersPage() {
       align: "end",
       cell: (a) => (
         <div className={styles.stackedActions}>
+          <EditCompatProvider account={a} />
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>
@@ -149,6 +156,7 @@ export function AdminProvidersPage() {
       <div className={styles.titleRow}>
         <h1>{t("page.admin.providers.title")}</h1>
         <div className={styles.actions}>
+          <AddCompatProvider />
           <AddProviderAccount />
         </div>
       </div>

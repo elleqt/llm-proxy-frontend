@@ -400,6 +400,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/providers/compat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an OpenAI-compatible provider. It serves its models at once, under its name as the policy provider name. The API key is never returned. */
+        post: operations["createCompatProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/providers/compat/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace an OpenAI-compatible provider's definition. The name cannot change. */
+        put: operations["updateCompatProvider"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/providers/compat/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List the models a vendor serves (GET {baseURL}/models). Nothing is saved. Without `apiKey`, the stored key of `accountId` is used, and only when `baseURL` is that provider's own: for any other URL the answer is `invalid_input` on `apiKey`, and nothing is sent. */
+        post: operations["discoverCompatModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/providers/{accountId}": {
         parameters: {
             query?: never;
@@ -759,6 +810,58 @@ export interface components {
                 /** Format: date-time */
                 observedAt?: string | null;
             }[];
+            /** @description Present for an OpenAI-compatible provider only. */
+            compat?: components["schemas"]["CompatProviderDetails"];
+        };
+        CompatModel: {
+            /** @description The model as the vendor names it. */
+            name: string;
+            /** @description The name clients request it by; absent serves it as `name`. */
+            alias?: string;
+        };
+        CompatProviderDetails: {
+            name: string;
+            baseURL: string;
+            prefix?: string;
+            /** @description Whether a key is stored. The key itself is never returned. */
+            hasApiKey: boolean;
+            models: components["schemas"]["CompatModel"][];
+        };
+        CompatProviderRequest: {
+            /** @description The policy provider name; immutable. */
+            name: string;
+            /** @example https://api.example.com/v1 */
+            baseURL: string;
+            /** @description Optional; a local vendor may need none. */
+            apiKey?: string;
+            /** @description Optional model prefix: clients request `prefix/model`. */
+            prefix?: string;
+            models: components["schemas"]["CompatModel"][];
+        };
+        CompatProviderUpdate: {
+            baseURL: string;
+            /** @description A new key. Absent keeps the stored one, but only at the same `baseURL`: a changed `baseURL` with a stored key and neither `apiKey` nor `clearApiKey` is `invalid_input` on `apiKey`, so a stored key never follows the provider to another host. */
+            apiKey?: string;
+            /**
+             * @description Remove the stored key. Ignored when `apiKey` is set.
+             * @default false
+             */
+            clearApiKey: boolean;
+            prefix?: string;
+            models: components["schemas"]["CompatModel"][];
+        };
+        CompatDiscoverRequest: {
+            baseURL: string;
+            apiKey?: string;
+            /** @description An existing provider whose stored key is used when `apiKey` is absent. */
+            accountId?: string;
+        };
+        CompatDiscoverResult: {
+            models: string[];
+            /** @description Per discovered model another provider already serves, those providers. A pooled model is admitted only to users granted it on every provider serving it. */
+            conflicts: {
+                [key: string]: string[];
+            };
         };
         ProviderLoginStartRequest: {
             /** @enum {string} */
@@ -785,6 +888,8 @@ export interface components {
                 requestRetry?: number;
                 /** @description Seconds. */
                 maxRetryInterval?: number;
+                /** @description Session-sticky routing (routing.session-affinity): a conversation stays on one vendor account. On unless the document turns it off. Applies to every provider. */
+                sessionAffinity?: boolean;
             };
         };
         SettingsUpdateRequest: {
@@ -795,6 +900,7 @@ export interface components {
                 proxyURL?: string;
                 requestRetry?: number;
                 maxRetryInterval?: number;
+                sessionAffinity?: boolean;
             };
             /** @default false */
             dryRun: boolean;
@@ -1700,6 +1806,135 @@ export interface operations {
             };
             /** @description `login_failed` — the vendor rejected the callback. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createCompatProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompatProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description The provider was added and is routable. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description `conflict` — a provider of that name exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `invalid_input` — `field` names what is wrong (a reserved name is `name`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateCompatProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A vendor account id. Not a UUID — the upstream credential identifier. */
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompatProviderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated and serving. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description `not_found` — no OpenAI-compatible provider has that id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `invalid_input` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    discoverCompatModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompatDiscoverRequest"];
+            };
+        };
+        responses: {
+            /** @description The vendor's models, and those another provider already serves. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompatDiscoverResult"];
+                };
+            };
+            /** @description `invalid_input`, or `provider_auth_failed` — the vendor refused the key. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `provider_unreachable` — the vendor could not be asked, or did not answer with a model list. */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

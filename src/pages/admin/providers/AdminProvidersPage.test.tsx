@@ -250,3 +250,154 @@ describe("account table", () => {
     expect(sent).toEqual([true, false]);
   });
 });
+
+const COMPAT_KEY = "sk-compat-example-key";
+
+function compatAccount(overrides: Partial<NonNullable<Schemas["ProviderAccount"]["compat"]>> = {}): Schemas["ProviderAccount"] {
+  return fixtures.providerAccount({
+    id: "openai-compatible-acme",
+    provider: "acme",
+    label: "acme",
+    email: null,
+    lastRefreshedAt: null,
+    quota: [],
+    compat: {
+      name: "acme",
+      baseURL: "https://api.example.com/v1",
+      hasApiKey: true,
+      models: [{ name: "model-a" }],
+      ...overrides,
+    },
+  });
+}
+
+describe("OpenAI-compatible providers", () => {
+  it("discovers models, warns about a pooled one, and adds the picked ones with the key, keeping it in no cache", async () => {
+    const accounts: Schemas["ProviderAccount"][] = [];
+    providers(accounts);
+    let discovered: Schemas["CompatDiscoverRequest"] | undefined;
+    let created: Schemas["CompatProviderRequest"] | undefined;
+    server.use(
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovered = await request.json();
+        return response(200).json({ models: ["model-a", "model-b"], conflicts: { "model-b": ["other"] } });
+      }),
+      http.post("/api/admin/providers/compat", async ({ request, response }) => {
+        created = await request.json();
+        const account = compatAccount({ models: created.models });
+        accounts.push(account);
+        return response(201).json(account);
+      }),
+    );
+    const user = userEvent.setup();
+    const { queryClient } = renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
+    await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
+    await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
+    await user.type(within(dialog).getByLabelText(en["compat.apiKey"]), COMPAT_KEY);
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+
+    const pickB = await within(dialog).findByRole("checkbox", { name: fill(en["compat.serve"], { model: "model-b" }) });
+    expect(discovered).toEqual({ baseURL: "https://api.example.com/v1", apiKey: COMPAT_KEY });
+    // Discovered models wait to be picked.
+    expect(pickB).not.toBeChecked();
+    await user.click(pickB);
+    expect(within(dialog).getByText(fill(en["compat.conflict"], { providers: "other" }))).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(fill(en["compat.aliasFor"], { model: "model-b" })), "b-fast");
+
+    await user.click(within(dialog).getByRole("button", { name: en["compat.save"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(created).toEqual({
+      name: "acme",
+      baseURL: "https://api.example.com/v1",
+      apiKey: COMPAT_KEY,
+      models: [{ name: "model-b", alias: "b-fast" }],
+    });
+    expect(await screen.findByRole("cell", { name: "https://api.example.com/v1" })).toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain(COMPAT_KEY);
+  });
+
+  it("refuses to save without a picked model", async () => {
+    providers([]);
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
+    await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
+    await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
+    await user.click(within(dialog).getByRole("button", { name: en["compat.save"] }));
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(en["compat.pickModels"]);
+  });
+
+  it("edits keeping the stored key, and asks for it again at another base URL", async () => {
+    providers([compatAccount()]);
+    const updates: Schemas["CompatProviderUpdate"][] = [];
+    const discovers: Schemas["CompatDiscoverRequest"][] = [];
+    server.use(
+      http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+        const body = await request.json();
+        updates.push(body);
+        return response(200).json(compatAccount({ baseURL: body.baseURL, models: body.models }));
+      }),
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovers.push(await request.json());
+        return response(200).json({ models: ["model-a"], conflicts: {} });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    expect(within(dialog).getByLabelText(en["compat.name"])).toHaveAttribute("readonly");
+
+    // At the stored base URL, discovery may use the stored key.
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await waitFor(() => expect(discovers).toHaveLength(1));
+    expect(discovers[0]).toEqual({ baseURL: "https://api.example.com/v1", accountId: "openai-compatible-acme" });
+
+    // At another one it may not, and the key field says so.
+    const baseURL = within(dialog).getByLabelText(en["compat.baseURL"]);
+    await user.clear(baseURL);
+    await user.type(baseURL, "https://other.example.com/v1");
+    expect(within(dialog).getByLabelText(en["compat.apiKey"])).toHaveAccessibleDescription(en["compat.apiKeyMovedHint"]);
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await waitFor(() => expect(discovers).toHaveLength(2));
+    expect(discovers[1]).toEqual({ baseURL: "https://other.example.com/v1" });
+
+    await user.clear(baseURL);
+    await user.type(baseURL, "https://api.example.com/v1");
+    await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]).toEqual({
+      baseURL: "https://api.example.com/v1",
+      models: [{ name: "model-a" }],
+      prefix: "",
+      clearApiKey: false,
+    });
+  });
+
+  it("shows the vendor's refusal of the key as its code's text", async () => {
+    providers([]);
+    server.use(
+      http.post("/api/admin/providers/compat/discover", ({ response }) =>
+        response(422).json({ code: "provider_auth_failed", message: "vendor said no", field: "apiKey" }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
+    await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.provider_auth_failed"]);
+  });
+});
