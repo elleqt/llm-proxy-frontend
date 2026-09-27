@@ -302,7 +302,8 @@ describe("OpenAI-compatible providers", () => {
 
     await openCompatForm(user);
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
-    await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
+    // Typed in any case, stored in lower case: upstream matches names case-insensitively.
+    await user.type(within(dialog).getByLabelText(en["compat.name"]), "AcMe");
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
     await user.type(within(dialog).getByLabelText(en["compat.apiKey"]), COMPAT_KEY);
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));

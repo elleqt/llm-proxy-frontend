@@ -828,7 +828,7 @@ export interface components {
             models: components["schemas"]["CompatModel"][];
         };
         CompatProviderRequest: {
-            /** @description The policy provider name; immutable. */
+            /** @description The policy provider name; immutable. Stored in lower case (upstream matches names case-insensitively), then it must match `^[a-z0-9][a-z0-9._-]{0,62}$`. */
             name: string;
             /** @example https://api.example.com/v1 */
             baseURL: string;

@@ -261,7 +261,7 @@ function RemoveAccount({
       {open && (
         <ConfirmDialog
           title={fill(t("providers.removeTitle"), { name })}
-          body={<p>{t("providers.removeBody")}</p>}
+          body={<p>{t(account.compat === undefined ? "providers.removeBody" : "providers.removeCompatBody")}</p>}
           typeToConfirm={name}
           confirmLabel={t("providers.removeConfirm")}
           busy={remove.isPending}

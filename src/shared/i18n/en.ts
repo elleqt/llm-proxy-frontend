@@ -322,6 +322,7 @@ export const en = {
   "providers.removeLabel": "Remove {name}",
   "providers.removeTitle": "Remove “{name}”?",
   "providers.removeBody": "The account's credentials are deleted from the gateway. Adding it back takes a new vendor sign-in.",
+  "providers.removeCompatBody": "The provider and its stored API key are deleted from the gateway, and its models stop being served. Adding it back means entering its address, key and models again.",
   "providers.removeConfirm": "Remove account",
   "providerLogin.open": "Add provider",
   "providerLogin.title": "Add a provider",

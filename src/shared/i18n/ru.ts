@@ -322,6 +322,7 @@ export const ru: Messages = {
   "providers.removeLabel": "Удалить {name}",
   "providers.removeTitle": "Удалить «{name}»?",
   "providers.removeBody": "Учётные данные аккаунта будут удалены из шлюза. Чтобы вернуть его, понадобится новый вход у вендора.",
+  "providers.removeCompatBody": "Провайдер и его сохранённый API-ключ будут удалены из шлюза, его модели перестанут отдаваться. Чтобы вернуть его, придётся заново ввести адрес, ключ и модели.",
   "providers.removeConfirm": "Удалить аккаунт",
   "providerLogin.open": "Добавить провайдера",
   "providerLogin.title": "Новый провайдер",
