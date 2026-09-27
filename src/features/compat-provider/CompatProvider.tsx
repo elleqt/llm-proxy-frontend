@@ -20,17 +20,9 @@ interface ModelRow {
   picked: boolean;
 }
 
-/** The "Add OpenAI-compatible" button and its form. */
-export function AddCompatProvider() {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button onClick={() => setOpen(true)}>{t("compat.open")}</Button>
-      {/* Mounted only while open: closing drops the typed key with the form's state. */}
-      {open && <CompatProviderForm onClose={() => setOpen(false)} />}
-    </>
-  );
+/** The OpenAI-compatible provider form for a new provider, opened from the "Add provider" wizard. */
+export function NewCompatProvider({ onClose }: { onClose: () => void }) {
+  return <CompatProviderForm onClose={onClose} />;
 }
 
 /** The "Edit" action of an OpenAI-compatible provider's row. */

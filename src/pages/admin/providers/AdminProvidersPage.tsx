@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
-import { AddCompatProvider, EditCompatProvider } from "../../../features/compat-provider/CompatProvider";
+import { EditCompatProvider, NewCompatProvider } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
@@ -26,6 +26,7 @@ export function AdminProvidersPage() {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+  const [addingCompat, setAddingCompat] = useState(false);
 
   const columns: Column<ProviderAccount>[] = [
     {
@@ -156,9 +157,9 @@ export function AdminProvidersPage() {
       <div className={styles.titleRow}>
         <h1>{t("page.admin.providers.title")}</h1>
         <div className={styles.actions}>
-          <AddCompatProvider />
-          <AddProviderAccount />
+          <AddProviderAccount onCompat={() => setAddingCompat(true)} />
         </div>
+        {addingCompat && <NewCompatProvider onClose={() => setAddingCompat(false)} />}
       </div>
       {accounts.isPending ? (
         <Spinner label={t("app.loading")} />

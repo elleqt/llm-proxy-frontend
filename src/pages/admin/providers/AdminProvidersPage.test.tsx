@@ -271,6 +271,14 @@ function compatAccount(overrides: Partial<NonNullable<Schemas["ProviderAccount"]
   });
 }
 
+/** Opens the OpenAI-compatible form the one way there is: the "Add provider" wizard's last choice. */
+async function openCompatForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: en["providerLogin.open"] }));
+  const wizard = screen.getByRole("dialog", { name: en["providerLogin.title"] });
+  await user.selectOptions(within(wizard).getByLabelText(en["providerLogin.provider"]), "openai-compatible");
+  await user.click(within(wizard).getByRole("button", { name: en["providerLogin.continue"] }));
+}
+
 describe("OpenAI-compatible providers", () => {
   it("discovers models, warns about a pooled one, and adds the picked ones with the key, keeping it in no cache", async () => {
     const accounts: Schemas["ProviderAccount"][] = [];
@@ -292,7 +300,7 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     const { queryClient } = renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    await openCompatForm(user);
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
     await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
@@ -325,7 +333,7 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    await openCompatForm(user);
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
     await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
@@ -393,7 +401,7 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: en["compat.open"] }));
+    await openCompatForm(user);
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));

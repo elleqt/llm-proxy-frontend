@@ -18,8 +18,14 @@ type LoginSession = components["schemas"]["ProviderLoginSession"];
 type StartRequest = components["schemas"]["ProviderLoginStartRequest"];
 type CompleteRequest = components["schemas"]["ProviderLoginCompleteRequest"];
 
-/** The "Add account" button and its three-step wizard. */
-export function AddProviderAccount() {
+/** The step-1 choice that leaves the sign-in wizard for the OpenAI-compatible form. */
+const COMPAT = "openai-compatible";
+
+/**
+ * The "Add provider" button and its wizard: a vendor sign-in in three steps, or,
+ * chosen in step 1, `onCompat` — the page opens the OpenAI-compatible form.
+ */
+export function AddProviderAccount({ onCompat }: { onCompat: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
@@ -28,7 +34,15 @@ export function AddProviderAccount() {
         {t("providerLogin.open")}
       </Button>
       {/* Mounted only while open: closing drops the sign-in link with the wizard's state. */}
-      {open && <Wizard onClose={() => setOpen(false)} />}
+      {open && (
+        <Wizard
+          onClose={() => setOpen(false)}
+          onCompat={() => {
+            setOpen(false);
+            onCompat();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -45,12 +59,12 @@ function useRemaining(expiresAt: string | undefined): number {
   return expiresAt === undefined ? 0 : Math.max(0, Date.parse(expiresAt) - now);
 }
 
-function Wizard({ onClose }: { onClose: () => void }) {
+function Wizard({ onClose, onCompat }: { onClose: () => void; onCompat: () => void }) {
   const t = useT();
   const [lang] = useLang();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<LoginProvider>(LOGIN_PROVIDERS[0]);
+  const [provider, setProvider] = useState<LoginProvider | typeof COMPAT>(LOGIN_PROVIDERS[0]);
   const [session, setSession] = useState<LoginSession | null>(null);
   const [step, setStep] = useState<"link" | "callback">("link");
   const [callbackURL, setCallbackURL] = useState("");
@@ -76,9 +90,9 @@ function Wizard({ onClose }: { onClose: () => void }) {
     gcTime: 0,
   });
 
-  const getLink = () =>
+  const getLink = (vendor: LoginProvider) =>
     start.mutate(
-      { provider },
+      { provider: vendor },
       {
         onSuccess: (created) => {
           setSession(created);
@@ -161,21 +175,25 @@ function Wizard({ onClose }: { onClose: () => void }) {
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();
-            getLink();
+            if (provider === COMPAT) onCompat();
+            else getLink(provider);
           }}
         >
           <Select
             label={t("providerLogin.provider")}
             value={provider}
             autoFocus
-            options={LOGIN_PROVIDERS.map((value) => ({ value, label: value }))}
-            onChange={(event) => setProvider(event.target.value as LoginProvider)}
+            options={[
+              ...LOGIN_PROVIDERS.map((value) => ({ value, label: value })),
+              { value: COMPAT, label: t("providerLogin.compat") },
+            ]}
+            onChange={(event) => setProvider(event.target.value as LoginProvider | typeof COMPAT)}
           />
           {start.isError && <p role="alert">{errorMessage(start.error)}</p>}
           <div className={styles.actions}>
             <Button onClick={onClose}>{t("ui.cancel")}</Button>
             <Button type="submit" variant="primary" busy={start.isPending}>
-              {t("providerLogin.getLink")}
+              {provider === COMPAT ? t("providerLogin.continue") : t("providerLogin.getLink")}
             </Button>
           </div>
         </form>
