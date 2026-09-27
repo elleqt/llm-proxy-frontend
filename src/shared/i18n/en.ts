@@ -351,7 +351,7 @@ export const en = {
   "compat.edit": "Edit",
   "compat.editLabel": "Edit {name}",
   "compat.name": "Name",
-  "compat.nameHint": "Used in access rules as name:*. Lower case letters, digits, dot, underscore and dash. It cannot be changed later.",
+  "compat.nameHint": "Used in access rules as name:*. Latin letters (stored in lower case), digits, dot, underscore and dash. It cannot be changed later.",
   "compat.baseURL": "Base URL",
   "compat.baseURLHint": "Up to and including the API version.",
   "compat.apiKey": "API key",

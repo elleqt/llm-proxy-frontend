@@ -154,7 +154,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
           readOnly={existing !== undefined}
           autoComplete="off"
           spellCheck={false}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => setName(event.target.value.toLowerCase())}
           error={onField("name")}
         />
         <TextField
