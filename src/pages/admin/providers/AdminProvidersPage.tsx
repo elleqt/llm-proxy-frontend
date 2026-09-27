@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
+import { EditCompatProvider, NewCompatProvider } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
@@ -25,6 +26,7 @@ export function AdminProvidersPage() {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+  const [addingCompat, setAddingCompat] = useState(false);
 
   const columns: Column<ProviderAccount>[] = [
     {
@@ -38,12 +40,17 @@ export function AdminProvidersPage() {
       id: "name",
       header: t("providers.account"),
       sortValue: (a) => accountName(a),
-      // A long address wraps anywhere rather than widening the table.
-      cell: (a) => (
-        <span className={styles.accountName} title={accountName(a)}>
-          {accountName(a)}
-        </span>
-      ),
+      // A long address wraps anywhere rather than widening the table. An
+      // OpenAI-compatible provider is named by its provider column; its base
+      // URL says where it goes.
+      cell: (a) => {
+        const shown = a.compat?.baseURL ?? accountName(a);
+        return (
+          <span className={styles.accountName} title={shown}>
+            {shown}
+          </span>
+        );
+      },
     },
     {
       id: "status",
@@ -137,6 +144,7 @@ export function AdminProvidersPage() {
       align: "end",
       cell: (a) => (
         <div className={styles.stackedActions}>
+          <EditCompatProvider account={a} />
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>
@@ -149,8 +157,9 @@ export function AdminProvidersPage() {
       <div className={styles.titleRow}>
         <h1>{t("page.admin.providers.title")}</h1>
         <div className={styles.actions}>
-          <AddProviderAccount />
+          <AddProviderAccount onCompat={() => setAddingCompat(true)} />
         </div>
+        {addingCompat && <NewCompatProvider onClose={() => setAddingCompat(false)} />}
       </div>
       {accounts.isPending ? (
         <Spinner label={t("app.loading")} />
@@ -252,7 +261,7 @@ function RemoveAccount({
       {open && (
         <ConfirmDialog
           title={fill(t("providers.removeTitle"), { name })}
-          body={<p>{t("providers.removeBody")}</p>}
+          body={<p>{t(account.compat === undefined ? "providers.removeBody" : "providers.removeCompatBody")}</p>}
           typeToConfirm={name}
           confirmLabel={t("providers.removeConfirm")}
           busy={remove.isPending}

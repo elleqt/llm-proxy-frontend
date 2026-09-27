@@ -4,11 +4,11 @@
 
 ## What it is
 
-This is the web interface of llm-proxy, a self-hosted gateway that lets a team share Claude and ChatGPT subscriptions through personal API keys. A plain CLIProxyAPI setup keeps keys and access in one config file that only one person can edit. llm-proxy moves that into a web interface: people issue and revoke their own keys and see their own spend, and administrators manage access per person and per model without editing files or restarting anything.
+This is the web interface of llm-proxy, a self-hosted gateway that lets a team share Claude and ChatGPT subscriptions, and any OpenAI-compatible API, through personal API keys ([supported providers](https://github.com/elleqt/llm-proxy-backend#supported-providers)). A plain CLIProxyAPI setup keeps keys and access in one config file that only one person can edit. llm-proxy moves that into a web interface: people issue and revoke their own keys and see their own spend, and administrators manage access per person and per model without editing files or restarting anything.
 
 - **Cabinet** — sign in with a password or through your OIDC identity provider; issue and revoke API keys; usage over 24 hours, 7 or 30 days in tokens or in dollars, with the estimated cost split into input, output, cache reads and cache writes, and what the prompt cache saved; the models your access rules allow.
 - **Connect** — ready-made configuration for Claude Code, omp and curl (OpenAI-compatible API), filled in with the gateway's address.
-- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's keys, recent requests with cost, and audit events; vendor accounts with their quota usage and a browser sign-in wizard for adding new ones; gateway settings (outbound proxy, retries) as fields or YAML with a server-side check before applying; the price list, kept up to date from a public model catalog, with manual overrides.
+- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's keys, recent requests with cost, and audit events; vendor accounts with their quota usage, added through one **Add provider** button: a browser sign-in for Claude and ChatGPT, or an OpenAI-compatible provider with model discovery; gateway settings (outbound proxy, retries, sticky sessions) as fields or YAML with a server-side check before applying; the price list, kept up to date from a public model catalog, with manual overrides.
 - English and Russian; four themes: system, light, pink, dark.
 
 ## Screenshots
