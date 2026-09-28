@@ -11,6 +11,7 @@ import { storedUsageUnit, storeUsageUnit, USAGE_UNITS, type UsageUnit } from "..
 import { fill } from "../../shared/lib/template";
 import { Badge, Button, Card, Chart, EmptyState, Spinner, Table, type Column } from "../../shared/ui";
 import { AvailableModels } from "./AvailableModels";
+import { SpendLimitsSection } from "./SpendLimitsSection";
 import styles from "./CabinetPage.module.css";
 
 export function CabinetPage() {
@@ -22,6 +23,7 @@ export function CabinetPage() {
       <div className={styles.sections}>
         <Tokens />
         <UsageSection />
+        <SpendLimitsSection />
         <AvailableModels />
       </div>
     </>

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import type uPlot from "uplot";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { myLimitsQuery } from "../../entities/limits/limits";
 import { handOffFreshToken } from "../../entities/token/tokens";
 import { en } from "../../shared/i18n/en";
 import { fill } from "../../shared/lib/template";
@@ -78,6 +79,44 @@ describe("key table", () => {
     expect(row("laptop")).not.toHaveTextContent(en["tokens.neverUsed"]);
     expect(row("old")).toHaveTextContent(en["tokens.revoked"]);
     expect(within(row("old")).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("spend limits", () => {
+  it("shows no limits section while no limit is in force", async () => {
+    cabinet([]);
+    server.use(http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.spendLimits({ windows: [] }))));
+    const { queryClient } = renderApp("/");
+
+    await screen.findByRole("region", { name: en["models.title"] });
+    await waitFor(() => expect(queryClient.getQueryData(myLimitsQuery.queryKey)).toBeDefined());
+    expect(screen.queryByRole("region", { name: en["limits.title"] })).not.toBeInTheDocument();
+  });
+
+  it("says a limit is reached and when it resets", async () => {
+    cabinet([]);
+    server.use(
+      http.get("/api/me/limits", ({ response }) =>
+        response(200).json(
+          fixtures.spendLimits({
+            windows: [
+              fixtures.spendWindow({
+                spentUsd: 10.5,
+                startedAt: "2026-09-28T10:00:00Z",
+                resetsAt: "2026-09-28T12:00:00Z",
+                exhausted: true,
+              }),
+            ],
+          }),
+        ),
+      ),
+    );
+    renderApp("/");
+
+    const limits = within(await screen.findByRole("region", { name: en["limits.title"] }));
+    expect(limits.getByText(en["limits.exhausted"])).toBeInTheDocument();
+    expect(limits.getByText(/^Resets \S/)).toBeInTheDocument();
+    expect(limits.queryByRole("button")).not.toBeInTheDocument();
   });
 });
 

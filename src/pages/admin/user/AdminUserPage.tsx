@@ -33,6 +33,7 @@ import {
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Invitation } from "../Invitation";
 import { TemporaryPassword } from "../TemporaryPassword";
+import { UserLimits } from "./UserLimits";
 import styles from "../admin.module.css";
 
 type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
@@ -75,6 +76,8 @@ export function AdminUserPage() {
           {/* Keyed by account: another user's card starts from that user's rules. */}
           <PolicyEditor key={account.id} user={account} />
         </Card>
+        {/* Keyed by account: another user's card starts from that user's mode. */}
+        <UserLimits key={account.id} userId={account.id} />
         <UserTokens user={account} />
         <UserActivity userId={account.id} />
       </div>

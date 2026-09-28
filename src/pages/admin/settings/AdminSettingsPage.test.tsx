@@ -12,8 +12,13 @@ const SETTINGS: Schemas["Settings"] = {
 };
 const DIFF = "-request-retry: 3\n+request-retry: 5\n";
 
-function settingsScreen() {
+/** An administrator on /admin/settings; every settings PUT and default-limits PUT is recorded. */
+function settingsScreen(
+  limits: Schemas["SpendLimit"][] = [],
+  saveLimits: (sent: Schemas["SpendLimit"][]) => Schemas["SpendLimit"][] = (sent) => sent,
+) {
   const updates: Schemas["SettingsUpdateRequest"][] = [];
+  const limitPuts: Schemas["SpendLimit"][][] = [];
   server.use(
     http.get("/api/me", ({ response }) => response(200).json(fixtures.me({ role: "admin" }))),
     http.get("/api/admin/settings", ({ response }) => response(200).json(SETTINGS)),
@@ -23,6 +28,12 @@ function settingsScreen() {
         catalog: { enabled: false, checkedAt: null, changedAt: null, models: 0, lastError: null },
       }),
     ),
+    http.get("/api/admin/limits", ({ response }) => response(200).json(limits)),
+    http.put("/api/admin/limits", async ({ request, response }) => {
+      const body = await request.json();
+      limitPuts.push(body);
+      return response(200).json(saveLimits(body));
+    }),
     http.put("/api/admin/settings", async ({ request, response }) => {
       const body = await request.json();
       updates.push(body);
@@ -30,7 +41,7 @@ function settingsScreen() {
       return response(200).json({ applied: !body.dryRun, diff: DIFF, settings });
     }),
   );
-  return { updates };
+  return { updates, limitPuts };
 }
 
 describe("gateway settings", () => {
@@ -133,5 +144,51 @@ describe("gateway settings", () => {
       fill(en["settings.errorField"], { error: en["error.forbidden_setting"], field: "port" }),
     );
     expect(screen.getByRole("button", { name: en["settings.apply"] })).toBeDisabled();
+  });
+});
+
+describe("default spend limits", () => {
+  const region = () => screen.findByRole("region", { name: en["limits.defaultsTitle"] });
+  const row = (card: HTMLElement, n: number) =>
+    within(within(card).getByRole("group", { name: fill(en["limits.row"], { n }) }));
+
+  it("lists the defaults, saves the edited list and shows the list the server kept", async () => {
+    // The server keeps the set shortest window first.
+    const { limitPuts } = settingsScreen([{ windowMinutes: 120, amountUsd: 10 }], (sent) =>
+      [...sent].sort((a, b) => a.windowMinutes - b.windowMinutes),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+    const defaults = await region();
+    const card = within(defaults);
+
+    expect(await card.findByRole("textbox", { name: en["limits.windowCount"] })).toHaveValue("2");
+    expect(card.getByRole("textbox", { name: en["limits.amount"] })).toHaveValue("10");
+    await user.click(card.getByRole("button", { name: en["limits.add"] }));
+    await user.type(row(defaults, 2).getByRole("textbox", { name: en["limits.windowCount"] }), "30");
+    await user.selectOptions(row(defaults, 2).getByRole("combobox", { name: en["limits.windowUnit"] }), "minutes");
+    await user.type(row(defaults, 2).getByRole("textbox", { name: en["limits.amount"] }), "1");
+    await user.click(card.getByRole("button", { name: en["limits.save"] }));
+
+    await waitFor(() =>
+      expect(limitPuts).toEqual([
+        [
+          { windowMinutes: 120, amountUsd: 10 },
+          { windowMinutes: 30, amountUsd: 1 },
+        ],
+      ]),
+    );
+    await waitFor(() =>
+      expect(row(defaults, 1).getByRole("combobox", { name: en["limits.windowUnit"] })).toHaveValue("minutes"),
+    );
+    expect(row(defaults, 1).getByRole("textbox", { name: en["limits.windowCount"] })).toHaveValue("30");
+    expect(row(defaults, 2).getByRole("textbox", { name: en["limits.windowCount"] })).toHaveValue("2");
+  });
+
+  it("says there are no default limits", async () => {
+    settingsScreen();
+    renderApp("/admin/settings");
+
+    expect(await within(await region()).findByText(en["limits.none"])).toBeInTheDocument();
   });
 });

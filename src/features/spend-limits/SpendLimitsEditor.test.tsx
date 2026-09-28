@@ -10,12 +10,20 @@ import { SpendLimitsEditor } from "./SpendLimitsEditor";
 
 function editor(value: readonly SpendLimit[], error: unknown = null) {
   const onSave = vi.fn();
+  const onEdit = vi.fn();
   render(
     <I18nProvider>
-      <SpendLimitsEditor value={value} onSave={onSave} saving={false} error={error} emptyLabel="Nothing is limited." />
+      <SpendLimitsEditor
+        value={value}
+        onSave={onSave}
+        onEdit={onEdit}
+        saving={false}
+        error={error}
+        emptyLabel="Nothing is limited."
+      />
     </I18nProvider>,
   );
-  return { onSave, user: userEvent.setup() };
+  return { onSave, onEdit, user: userEvent.setup() };
 }
 
 const row = (n: number) => within(screen.getByRole("group", { name: fill(en["limits.row"], { n }) }));
@@ -86,6 +94,19 @@ describe("SpendLimitsEditor", () => {
     editor([{ windowMinutes: 120, amountUsd: 10 }], new ApiError(500, "internal"));
 
     expect(screen.getByRole("alert")).toHaveTextContent(en["error.internal"]);
+  });
+
+  it("reports every change to the rows, so the caller can drop a refusal made about the old ones", async () => {
+    const { onEdit, user } = editor([{ windowMinutes: 120, amountUsd: 10 }]);
+
+    await user.type(row(1).getByRole("textbox", { name: en["limits.amount"] }), "5");
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    await user.selectOptions(row(1).getByRole("combobox", { name: en["limits.windowUnit"] }), "days");
+    await user.click(screen.getByRole("button", { name: en["limits.add"] }));
+    await user.click(row(2).getByRole("button", { name: en["limits.remove"] }));
+    expect(onEdit).toHaveBeenCalledTimes(4);
+    await user.click(save());
+    expect(onEdit).toHaveBeenCalledTimes(4);
   });
 
   it("saves no limits once every row is removed, and says so with the empty label", async () => {

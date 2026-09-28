@@ -6,6 +6,7 @@ import { useErrorMessage, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
 import { Button, Card, CodeEditor, CopyButton, DiffView, Spinner, Tabs, TextField, Toggle } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { DefaultLimits } from "./DefaultLimits";
 import { Prices } from "./Prices";
 import styles from "../admin.module.css";
 
@@ -27,6 +28,7 @@ export function AdminSettingsPage() {
           )}
         </Card>
         <Prices />
+        <DefaultLimits />
       </div>
     </>
   );

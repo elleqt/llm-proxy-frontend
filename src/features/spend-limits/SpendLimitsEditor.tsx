@@ -70,16 +70,20 @@ const REFUSED_FIELDS: Record<string, Field> = { windowMinutes: "window", amountU
 /**
  * A set of spend limits, each "amount per window". Saves the whole set at
  * once; the caller owns the request, and passes its failure back as `error`.
+ * `onEdit` reports each change to the rows: a refusal names a row by its
+ * position, so the caller drops it once the rows may have moved.
  */
 export function SpendLimitsEditor({
   value,
   onSave,
+  onEdit,
   saving,
   error,
   emptyLabel,
 }: {
   value: readonly SpendLimit[];
   onSave: (next: SpendLimit[]) => void;
+  onEdit?: () => void;
   saving: boolean;
   error: unknown;
   emptyLabel: string;
@@ -97,10 +101,14 @@ export function SpendLimitsEditor({
     setErrors({});
   }
 
-  const edit = (key: number, change: Partial<Row>) =>
-    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...change } : row)));
-  const remove = (key: number) => setRows((current) => current.filter((row) => row.key !== key));
-  const add = () => setRows((current) => [...current, { key: nextRowKey++, count: "", unit: "hours", amount: "" }]);
+  const change = (next: (current: Row[]) => Row[]) => {
+    setRows(next);
+    onEdit?.();
+  };
+  const edit = (key: number, patch: Partial<Row>) =>
+    change((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  const remove = (key: number) => change((current) => current.filter((row) => row.key !== key));
+  const add = () => change((current) => [...current, { key: nextRowKey++, count: "", unit: "hours", amount: "" }]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

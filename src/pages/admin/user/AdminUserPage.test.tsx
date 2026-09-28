@@ -20,6 +20,8 @@ interface Card {
   oidc?: boolean;
   /** Coverage the preview answers with, per requested rule set. */
   preview?: (rules: string[]) => Schemas["PolicyPreview"];
+  /** The account's spend limits as first shown. */
+  limits?: Schemas["SpendLimits"];
 }
 
 /** An administrator on the card of `user`; the requests the card makes are recorded. */
@@ -29,8 +31,11 @@ function card({
   activity = { requests: [], audit: [] },
   oidc = true,
   preview = () => ({ errors: [], covered: [] }),
+  limits = fixtures.spendLimits(),
 }: Card = {}) {
   const previews: string[][] = [];
+  const limitPuts: Schemas["SpendLimitsUpdate"][] = [];
+  const resets: Schemas["SpendLimitReset"][] = [];
   server.use(
     http.get("/api/me", ({ response }) => response(200).json(fixtures.me({ role: "admin" }))),
     http.get("/api/admin/users/{userId}", ({ response }) => response(200).json(user)),
@@ -44,8 +49,33 @@ function card({
       previews.push(rules);
       return response(200).json(preview(rules));
     }),
+    http.get("/api/admin/users/{userId}/limits", ({ response }) => response(200).json(limits)),
+    // The saved set in force, each rule with no live window yet.
+    http.put("/api/admin/users/{userId}/limits", async ({ request, response }) => {
+      const body = await request.json();
+      limitPuts.push(body);
+      const custom = body.limits ?? [];
+      return response(200).json(
+        body.mode === "default"
+          ? fixtures.spendLimits()
+          : fixtures.spendLimits({ mode: "custom", custom, windows: custom.map((rule) => fixtures.spendWindow(rule)) }),
+      );
+    }),
+    // The reset windows close: nothing live, nothing spent.
+    http.post("/api/admin/users/{userId}/limits/reset", async ({ request, response }) => {
+      const body = await request.json();
+      resets.push(body);
+      return response(200).json({
+        ...limits,
+        windows: limits.windows.map((window) =>
+          body.windowMinutes === undefined || body.windowMinutes === window.windowMinutes
+            ? { ...window, spentUsd: 0, startedAt: null, resetsAt: null, exhausted: false }
+            : window,
+        ),
+      });
+    }),
   );
-  return { previews };
+  return { previews, limitPuts, resets };
 }
 
 describe("blocking", () => {
@@ -449,5 +479,149 @@ describe("policy editor", () => {
     expect(await screen.findByRole("list", { name: en["policy.coveredModels"] })).toHaveTextContent(
       "claude:claude-sonnet-5",
     );
+  });
+});
+
+describe("spend limits", () => {
+  const LIVE = fixtures.spendWindow({
+    spentUsd: 4,
+    startedAt: "2026-09-28T10:00:00Z",
+    resetsAt: "2026-09-28T12:00:00Z",
+  });
+  const IDLE = fixtures.spendWindow({ windowMinutes: 2880, amountUsd: 50 });
+
+  async function limitsCard() {
+    return within(await screen.findByRole("region", { name: en["limits.title"] }));
+  }
+
+  it("shows inherited windows under Default, and saves an own limit", async () => {
+    const { limitPuts } = card({ limits: fixtures.spendLimits({ windows: [IDLE] }) });
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    expect(await limits.findByRole("radio", { name: en["limits.modeDefault"] })).toBeChecked();
+    expect(limits.getByText("$50.00 per 2 days")).toBeInTheDocument();
+    expect(limits.queryByRole("button", { name: en["limits.save"] })).not.toBeInTheDocument();
+
+    await user.click(limits.getByRole("radio", { name: en["limits.modeCustom"] }));
+    expect(limits.getByText(en["limits.none"])).toBeInTheDocument();
+    await user.click(limits.getByRole("button", { name: en["limits.add"] }));
+    await user.type(limits.getByRole("textbox", { name: en["limits.windowCount"] }), "2");
+    await user.type(limits.getByRole("textbox", { name: en["limits.amount"] }), "10");
+    await user.click(limits.getByRole("button", { name: en["limits.save"] }));
+
+    await waitFor(() => expect(limitPuts).toEqual([{ mode: "custom", limits: [{ windowMinutes: 120, amountUsd: 10 }] }]));
+    expect(await limits.findByText("$10.00 per 2 hours")).toBeInTheDocument();
+    expect(limits.queryByText("$50.00 per 2 days")).not.toBeInTheDocument();
+    expect(limits.getByRole("radio", { name: en["limits.modeCustom"] })).toBeChecked();
+  });
+
+  it("returns an account with its own limits to the defaults", async () => {
+    const own = { windowMinutes: 60, amountUsd: 5 };
+    const { limitPuts } = card({
+      limits: fixtures.spendLimits({ mode: "custom", custom: [own], windows: [fixtures.spendWindow(own)] }),
+    });
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    expect(await limits.findByRole("radio", { name: en["limits.modeCustom"] })).toBeChecked();
+    expect(limits.getByRole("textbox", { name: en["limits.windowCount"] })).toHaveValue("1");
+    await user.click(limits.getByRole("radio", { name: en["limits.modeDefault"] }));
+    expect(limits.queryByRole("textbox", { name: en["limits.windowCount"] })).not.toBeInTheDocument();
+    await user.click(limits.getByRole("button", { name: en["limits.save"] }));
+
+    await waitFor(() => expect(limitPuts).toEqual([{ mode: "default" }]));
+    // Saved: nothing is left to save while Default is the stored mode.
+    await waitFor(() => expect(limits.queryByRole("button", { name: en["limits.save"] })).not.toBeInTheDocument());
+    expect(limits.getByRole("radio", { name: en["limits.modeDefault"] })).toBeChecked();
+  });
+
+  it("clears a refusal on a row once the rows are edited again", async () => {
+    card({ limits: fixtures.spendLimits({ mode: "custom" }) });
+    server.use(
+      http.put("/api/admin/users/{userId}/limits", ({ response }) =>
+        response(422).json({ code: "invalid_input", message: "", field: "[0].amountUsd" }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    for (const [n, count, amount] of [
+      [1, "1", "5"],
+      [2, "2", "10"],
+    ] as const) {
+      await user.click(await limits.findByRole("button", { name: en["limits.add"] }));
+      const row = within(limits.getByRole("group", { name: fill(en["limits.row"], { n }) }));
+      await user.type(row.getByRole("textbox", { name: en["limits.windowCount"] }), count);
+      await user.type(row.getByRole("textbox", { name: en["limits.amount"] }), amount);
+    }
+    await user.click(limits.getByRole("button", { name: en["limits.save"] }));
+    const [first] = limits.getAllByRole("textbox", { name: en["limits.amount"] });
+    await waitFor(() => expect(first).toHaveAccessibleDescription(en["error.invalid_input"]));
+
+    // The refused row goes; the refusal must not move to the row now first.
+    await user.click(limits.getAllByRole("button", { name: en["limits.remove"] })[0] as HTMLElement);
+
+    expect(limits.getByRole("textbox", { name: en["limits.amount"] })).not.toHaveAccessibleDescription(
+      en["error.invalid_input"],
+    );
+  });
+
+  it("resets a live window after confirmation and shows it closed", async () => {
+    const { resets } = card({ limits: fixtures.spendLimits({ windows: [LIVE, IDLE] }) });
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    // Only the live window can be reset.
+    const reset = await limits.findAllByRole("button", { name: en["limits.reset"] });
+    expect(reset).toHaveLength(1);
+    await user.click(reset[0] as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: en["limits.resetTitle"] });
+    expect(resets).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(resets).toEqual([{ windowMinutes: 120 }]);
+    expect(limits.getAllByText(en["limits.opensWithRequest"])).toHaveLength(2);
+    expect(limits.queryByRole("button", { name: en["limits.reset"] })).not.toBeInTheDocument();
+    expect(limits.queryByRole("button", { name: en["limits.resetAll"] })).not.toBeInTheDocument();
+  });
+
+  it("resets every window at once", async () => {
+    const { resets } = card({ limits: fixtures.spendLimits({ windows: [LIVE, { ...LIVE, windowMinutes: 2880 }] }) });
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    await user.click(await limits.findByRole("button", { name: en["limits.resetAll"] }));
+    const dialog = screen.getByRole("dialog", { name: en["limits.resetAllTitle"] });
+    await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(resets).toEqual([{}]);
+    expect(limits.getAllByText(en["limits.opensWithRequest"])).toHaveLength(2);
+  });
+
+  it("shows a refused reset inside the confirmation, and the window stays live", async () => {
+    card({ limits: fixtures.spendLimits({ windows: [LIVE] }) });
+    server.use(
+      http.post("/api/admin/users/{userId}/limits/reset", ({ response }) =>
+        response(422).json({ code: "invalid_input", message: "", field: "windowMinutes" }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    await user.click(await limits.findByRole("button", { name: en["limits.reset"] }));
+    const dialog = screen.getByRole("dialog", { name: en["limits.resetTitle"] });
+    await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.invalid_input"]);
+    expect(limits.getByText("$4.00 of $10.00")).toBeInTheDocument();
   });
 });
