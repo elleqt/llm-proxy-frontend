@@ -181,6 +181,15 @@ describe("default spend limits", () => {
   const row = (card: HTMLElement, n: number) =>
     within(within(card).getByRole("group", { name: fill(en["limits.row"], { n }) }));
 
+  it("sits above the price list", async () => {
+    settingsScreen([{ windowMinutes: 120, amountUsd: 10 }]);
+    renderApp("/admin/settings");
+
+    const defaults = await region();
+    const prices = await screen.findByRole("region", { name: en["prices.title"] });
+    expect(defaults.compareDocumentPosition(prices) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("lists the defaults, saves the edited list and shows the list the server kept", async () => {
     // The server keeps the set shortest window first.
     const { limitPuts } = settingsScreen([{ windowMinutes: 120, amountUsd: 10 }], (sent) =>
