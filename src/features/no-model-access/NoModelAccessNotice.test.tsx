@@ -54,6 +54,18 @@ describe("the no-model-access notice", () => {
     }
   });
 
+  it("says the rules match nothing when every allowed model is unpriced", async () => {
+    signedIn(fixtures.me({ policy: ["mistral:*"], policySource: "local" }));
+    server.use(
+      http.get("/api/me/models", ({ response }) =>
+        response(200).json({ providers: [{ name: "mistral", models: [], unpriced: ["mistral-large"] }] }),
+      ),
+    );
+    await pageShown("/connect", en["page.connect.title"]);
+
+    expect(await screen.findByText(new RegExp(en["access.noMatch"]))).toHaveAttribute("role", "status");
+  });
+
   it("is absent when the policy allows some model", async () => {
     signedIn(fixtures.me({ policy: ["chatgpt:*"], policySource: "idp" }));
     await pageShown("/connect", en["page.connect.title"]);

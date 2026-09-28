@@ -26,4 +26,23 @@ describe("/connect without a key issued in this tab", () => {
     expect(screen.getByText(/chat\/completions/)).toHaveTextContent("curl https://llm.example.com/v1/chat/completions");
     expect(screen.getByRole("link", { name: en["issue.open"] })).toHaveAttribute("href", "/");
   });
+
+  it("leaves out a provider whose models are all unpriced", async () => {
+    server.use(
+      http.get("/api/me", ({ response }) => response(200).json(fixtures.me())),
+      http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+      http.get("/api/me/models", ({ response }) =>
+        response(200).json({
+          providers: [
+            { name: "chatgpt", models: [], unpriced: ["gpt-5"] },
+            { name: "claude", models: ["claude-sonnet-5"] },
+          ],
+        }),
+      ),
+    );
+    renderApp("/connect");
+
+    const omp = await screen.findByText(/anthropic-messages/);
+    await waitFor(() => expect(omp).not.toHaveTextContent("openai-codex"));
+  });
 });

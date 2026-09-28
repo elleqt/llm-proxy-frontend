@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { connectInfoQuery } from "../../entities/connect/connectInfo";
-import { myModelsQuery } from "../../entities/user/myModels";
+import { myModelsQuery, usableProviders } from "../../entities/user/myModels";
 import { takeFreshToken, type FreshToken } from "../../entities/token/tokens";
 import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useT } from "../../shared/i18n";
@@ -39,7 +39,7 @@ export function ConnectPage() {
       info.data.apiBaseURL,
       fresh?.secret ?? placeholder,
       t("connect.modelPlaceholder"),
-      models.data?.providers.map((provider) => provider.name),
+      models.data && usableProviders(models.data).map((provider) => provider.name),
     );
     body = (
       <>
