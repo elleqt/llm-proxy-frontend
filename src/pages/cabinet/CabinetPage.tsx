@@ -22,9 +22,9 @@ export function CabinetPage() {
       <h1>{t("page.cabinet.title")}</h1>
       <NoModelAccessNotice />
       <div className={styles.sections}>
+        <SpendLimitsSection />
         <Tokens />
         <UsageSection />
-        <SpendLimitsSection />
         <AvailableModels />
       </div>
     </>

@@ -29,8 +29,8 @@ export function AdminSettingsPage() {
           )}
         </Card>
         <CostsVisibility />
-        <Prices />
         <DefaultLimits />
+        <Prices />
       </div>
     </>
   );
