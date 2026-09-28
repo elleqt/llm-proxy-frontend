@@ -1869,7 +1869,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `invalid_input`: `field` is `limits` (missing with `custom`, present with `default`, or more than 10 entries) or an entry of it relative to `limits`, e.g. `[1].windowMinutes`. */
+            /** @description `invalid_input`: `field` is `mode` (missing, or neither `custom` nor `default`), `limits` (missing with `custom`, present with `default`, or more than 10 entries), or an entry of it relative to `limits`, e.g. `[1].windowMinutes`. */
             422: {
                 headers: {
                     [name: string]: unknown;
