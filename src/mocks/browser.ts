@@ -365,8 +365,16 @@ function limitsView(userId: string): Schemas["SpendLimits"] {
     custom: own ?? [],
     windows: [...(own ?? defaultLimits)]
       .sort((a, b) => a.windowMinutes - b.windowMinutes)
-      .map((rule) => ({ ...rule, spentUsd: 0, startedAt: null, resetsAt: null, exhausted: false })),
+      .map((rule) => ({ ...rule, spentUsd: 0, spentPercent: 0, startedAt: null, resetsAt: null, exhausted: false })),
   };
+}
+
+/** The administrator's setting: users see their costs in US dollars. Off, as on a fresh install. */
+let costsVisible = false;
+
+/** Whether the signed-in caller is shown dollars: always an administrator, otherwise per the setting. */
+function costsVisibleToMe(): boolean {
+  return me?.role === "admin" || costsVisible;
 }
 
 /** The backend's rules for a set of limits: the offending field, relative to the list, or undefined. */
@@ -567,7 +575,7 @@ function usage(from: Date, to: Date): Schemas["Usage"] {
     totals: {
       requests: points.reduce((sum, p) => sum + p.requests, 0),
       tokensTotal: points.reduce((sum, p) => sum + p.tokensTotal, 0),
-      cost: costSummary(points.reduce((sum, p) => sum + p.costUSD, 0)),
+      cost: costSummary(points.reduce((sum, p) => sum + (p.costUSD ?? 0), 0)),
     },
     points,
   };
@@ -649,12 +657,22 @@ const handlers = [
   http.get("/api/me/usage", ({ query, response }) => {
     const to = new Date(query.get("to") ?? Date.now());
     const from = new Date(query.get("from") ?? to.getTime() - 7 * 24 * HOUR);
-    return response(200).json(usage(from, to));
+    const all = usage(from, to);
+    if (costsVisibleToMe()) return response(200).json(all);
+    // As the backend: tokens and requests alone.
+    const { cost: _cost, ...totals } = all.totals;
+    return response(200).json({ ...all, totals, points: all.points.map(({ costUSD: _costUSD, ...point }) => point) });
   }),
-  http.get("/api/me/limits", ({ response }) =>
-    me === null ? response.untyped(unauthenticated()) : response(200).json(limitsView(me.id)),
+  http.get("/api/me/limits", ({ response }) => {
+    if (me === null) return response.untyped(unauthenticated());
+    const { windows } = limitsView(me.id);
+    return response(200).json({
+      windows: costsVisibleToMe() ? windows : windows.map(({ amountUsd: _amount, spentUsd: _spent, ...window }) => window),
+    });
+  }),
+  http.get("/api/config", ({ response }) =>
+    response(200).json({ apiBaseURL: "https://llm.example.com", costsVisible: costsVisibleToMe() }),
   ),
-  http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
   http.get("/api/admin/users", ({ response }) => response(200).json(users)),
   http.post("/api/admin/users", async ({ request, response }) => {
     const body = await request.json();
@@ -903,6 +921,11 @@ const handlers = [
     const diff = diffOf(settings.yaml, yaml);
     if (!body.dryRun) settings = next;
     return response(200).json({ applied: !body.dryRun, diff, settings: next });
+  }),
+  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible })),
+  http.put("/api/admin/config", async ({ request, response }) => {
+    ({ costsVisible } = await request.json());
+    return response(200).json({ costsVisible });
   }),
   http.get("/api/admin/limits", ({ response }) => response(200).json(defaultLimits)),
   http.put("/api/admin/limits", async ({ request, response }) => {

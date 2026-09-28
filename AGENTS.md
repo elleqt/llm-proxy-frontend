@@ -4,9 +4,9 @@
 
 Web UI for **llm-proxy**, a self-hosted gateway that lets a team share Claude/ChatGPT subscriptions through personal API keys. This repo is the SPA only:
 
-- **Cabinet** (`/`): sign in (password or OIDC), issue/revoke API keys, usage charts (tokens or USD), allowed models, spend-limit windows.
+- **Cabinet** (`/`): sign in (password or OIDC), issue/revoke API keys, usage charts (tokens, or USD when `/api/config` says `costsVisible`), allowed models, spend-limit windows (share spent; dollars only when costs are visible).
 - **Connect** (`/connect`): config snippets for Claude Code, omp, curl.
-- **Admin** (`/admin/*`): users + access policies (`<provider>:<model-glob>`, e.g. `chatgpt:*`), provider accounts + sign-in wizard, gateway settings, prices, spend limits (defaults in settings, per-account mode and window resets on the user page).
+- **Admin** (`/admin/*`): users + access policies (`<provider>:<model-glob>`, e.g. `chatgpt:*`), provider accounts + sign-in wizard, gateway settings, whether users see their costs, prices, spend limits (defaults in settings, per-account mode and window resets on the user page).
 
 The backend (sibling repo `../backend`) owns the web API, the OpenAPI contract, and the docker compose files that deploy both. This repo is **public**: never write real hostnames, domains, IPs, realms, group names, or deployment paths into code, tests, comments, or fixtures. Use `example.com` and generic names.
 
@@ -147,7 +147,7 @@ useMutation({
 - **`renderApp(path)`** (`src/test/render.tsx`) renders the real routes + real `createQueryClient` (retry delay 0) and returns `{ router, queryClient, ...render }`. Use it for page and feature tests.
 - **MSW is the only network boundary** (`src/test/server.ts`):
   - `http` is openapi-msw typed by the contract.
-  - `onUnhandledRequest: "error"`, so every endpoint the screen hits needs `server.use(http.get("/api/...", ({ response }) => response(200).json(fixtures.me())))`. Default handlers answer `/api/me/models` (one claude model) and `/api/me/limits` (`fixtures.spendLimits()`, no limits); a test about either overrides it.
+  - `onUnhandledRequest: "error"`, so every endpoint the screen hits needs `server.use(http.get("/api/...", ({ response }) => response(200).json(fixtures.me())))`. Default handlers answer `/api/config` (`fixtures.config()`, costs hidden from users), `/api/me/models` (one claude model), `/api/me/limits` (`fixtures.myLimits()`, no limits) and `/api/admin/config` (costs hidden); a test about any of them overrides it.
   - Use `fixtures.*` factories with overrides.
   - For errors the operation doesn't declare (the 401/403 conventions, 404, 409, 500, ...), use `response.untyped(errorResponse(status, { code, message: "" }))`, e.g. `errorResponse(409, { code: "catalog_disabled", message: "" })`.
 - **Queries and interaction:**

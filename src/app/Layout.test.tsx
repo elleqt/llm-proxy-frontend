@@ -7,7 +7,6 @@ import { fixtures, http, server, type Schemas } from "../test/server";
 function signedIn(me: Schemas["Me"]) {
   server.use(
     http.get("/api/me", ({ response }) => response(200).json(me)),
-    http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
   );
 }
 

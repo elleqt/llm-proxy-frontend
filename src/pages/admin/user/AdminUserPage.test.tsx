@@ -485,6 +485,7 @@ describe("policy editor", () => {
 describe("spend limits", () => {
   const LIVE = fixtures.spendWindow({
     spentUsd: 4,
+    spentPercent: 40,
     startedAt: "2026-09-28T10:00:00Z",
     resetsAt: "2026-09-28T12:00:00Z",
   });
@@ -655,6 +656,6 @@ describe("spend limits", () => {
     await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.invalid_input"]);
-    expect(limits.getByText("$4.00 of $10.00")).toBeInTheDocument();
+    expect(limits.getByText("$4.00 of $10.00 (40%)")).toBeInTheDocument();
   });
 });

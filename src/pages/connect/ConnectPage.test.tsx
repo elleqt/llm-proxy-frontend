@@ -8,7 +8,7 @@ describe("/connect without a key issued in this tab", () => {
   it("builds every block from apiBaseURL, with a placeholder and a way to issue a key", async () => {
     server.use(
       http.get("/api/me", ({ response }) => response(200).json(fixtures.me())),
-      http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+      http.get("/api/config", ({ response }) => response(200).json(fixtures.config({ apiBaseURL: "https://llm.example.com" }))),
     );
     renderApp("/connect");
 
@@ -30,7 +30,7 @@ describe("/connect without a key issued in this tab", () => {
   it("leaves out a provider whose models are all unpriced", async () => {
     server.use(
       http.get("/api/me", ({ response }) => response(200).json(fixtures.me())),
-      http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+      http.get("/api/config", ({ response }) => response(200).json(fixtures.config({ apiBaseURL: "https://llm.example.com" }))),
       http.get("/api/me/models", ({ response }) =>
         response(200).json({
           providers: [

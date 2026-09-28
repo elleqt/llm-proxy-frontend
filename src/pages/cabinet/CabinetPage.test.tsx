@@ -8,6 +8,7 @@ import { myLimitsQuery } from "../../entities/limits/limits";
 import { handOffFreshToken } from "../../entities/token/tokens";
 import { en } from "../../shared/i18n/en";
 import { fill } from "../../shared/lib/template";
+import { storedUsageUnit, storeUsageUnit } from "../../shared/lib/preferences";
 import { renderApp } from "../../test/render";
 import { fixtures, http, server, type Schemas } from "../../test/server";
 
@@ -57,7 +58,6 @@ function cabinet(tokens: Schemas["Token"][], usage: Schemas["Usage"] = fixtures.
     http.get("/api/me", ({ response }) => response(200).json(fixtures.me())),
     http.get("/api/me/tokens", ({ response }) => response(200).json(tokens)),
     http.get("/api/me/usage", ({ response }) => response(200).json(usage)),
-    http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://proxy.example.com" })),
   );
 }
 
@@ -85,7 +85,7 @@ describe("key table", () => {
 describe("spend limits", () => {
   it("shows no limits section while no limit is in force", async () => {
     cabinet([]);
-    server.use(http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.spendLimits({ windows: [] }))));
+    server.use(http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.myLimits())));
     const { queryClient } = renderApp("/");
 
     await screen.findByRole("region", { name: en["models.title"] });
@@ -98,10 +98,10 @@ describe("spend limits", () => {
     server.use(
       http.get("/api/me/limits", ({ response }) =>
         response(200).json(
-          fixtures.spendLimits({
+          fixtures.myLimits({
             windows: [
-              fixtures.spendWindow({
-                spentUsd: 10.5,
+              fixtures.mySpendWindow({
+                spentPercent: 100,
                 startedAt: "2026-09-28T10:00:00Z",
                 resetsAt: "2026-09-28T12:00:00Z",
                 exhausted: true,
@@ -352,7 +352,81 @@ describe("usage", () => {
   });
 });
 
+describe("costs hidden from users", () => {
+  // What the server answers while costs are hidden: no dollars anywhere.
+  const tokensOnly = fixtures.usage({
+    from: "2026-09-23T07:00:00Z",
+    to: "2026-09-23T09:00:00Z",
+    totals: { requests: 3, tokensTotal: 1000 },
+    points: [
+      { at: "2026-09-23T07:00:00Z", model: "claude-sonnet-5", requests: 1, tokensTotal: 100 },
+      { at: "2026-09-23T08:00:00Z", model: "claude-sonnet-5", requests: 2, tokensTotal: 900 },
+    ],
+  });
+  const liveWindow = {
+    windowMinutes: 120,
+    spentPercent: 41,
+    startedAt: "2026-09-28T10:00:00Z",
+    resetsAt: "2026-09-28T12:00:00Z",
+    exhausted: false,
+  };
+
+  it("shows usage in tokens with no unit choice or cost, and limits by their share alone", async () => {
+    cabinet([], tokensOnly);
+    server.use(
+      http.get("/api/me/limits", ({ response }) =>
+        response(200).json(fixtures.myLimits({ windows: [fixtures.mySpendWindow(liveWindow)] })),
+      ),
+    );
+    renderApp("/");
+
+    const usage = await screen.findByRole("region", { name: en["usage.title"] });
+    expect(await within(usage).findByRole("img", { name: en["usage.chart"] })).toBeInTheDocument();
+    expect(within(usage).queryByRole("group", { name: en["usage.unit"] })).not.toBeInTheDocument();
+    expect(within(usage).queryByText(en["usage.estimateNote"])).not.toBeInTheDocument();
+    expect(usage).not.toHaveTextContent("$");
+
+    const limits = await screen.findByRole("region", { name: en["limits.title"] });
+    expect(within(limits).getByText(fill(en["limits.spentShare"], { percent: "41%" }))).toBeInTheDocument();
+    expect(within(limits).getByRole("meter", { name: "2 hours" })).toHaveValue(41);
+    expect(limits).not.toHaveTextContent("$");
+  });
+
+  it("shows tokens despite a stored choice of dollars, and keeps that choice", async () => {
+    storeUsageUnit("usd");
+    cabinet([], tokensOnly);
+    renderApp("/");
+
+    expect(await screen.findByRole("img", { name: en["usage.chart"] })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: en["usage.chartCost"] })).not.toBeInTheDocument();
+    expect(storedUsageUnit()).toBe("usd");
+  });
+
+  it("offers dollars and shows limits in dollars once costs are visible", async () => {
+    cabinet([], tokensOnly);
+    server.use(
+      http.get("/api/config", ({ response }) => response(200).json(fixtures.config({ costsVisible: true }))),
+      http.get("/api/me/limits", ({ response }) =>
+        response(200).json(
+          fixtures.myLimits({ windows: [fixtures.mySpendWindow({ ...liveWindow, amountUsd: 10, spentUsd: 4.1 })] }),
+        ),
+      ),
+    );
+    renderApp("/");
+
+    const usage = await screen.findByRole("region", { name: en["usage.title"] });
+    expect(await within(usage).findByRole("group", { name: en["usage.unit"] })).toBeInTheDocument();
+    const limits = await screen.findByRole("region", { name: en["limits.title"] });
+    expect(within(limits).getByText("$4.10 of $10.00 (41%)")).toBeInTheDocument();
+    expect(within(limits).getByRole("meter", { name: "$10.00 per 2 hours" })).toHaveValue(41);
+  });
+});
+
 describe("usage in dollars", () => {
+  beforeEach(() => {
+    server.use(http.get("/api/config", ({ response }) => response(200).json(fixtures.config({ costsVisible: true }))));
+  });
+
   const cost = (overrides: Partial<Schemas["CostSummary"]> = {}): Schemas["CostSummary"] => ({
     totalUSD: 4.12,
     inputUSD: 1.1,

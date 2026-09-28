@@ -193,7 +193,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's spend limits in force and the state of each window. */
+        /**
+         * The caller's spend limits in force and the state of each window.
+         * @description Each window's share of its limit always; the amounts in US dollars only while `Config.costsVisible` is true. Administrators see the amounts on the account's limits either way.
+         */
         get: operations["getMyLimits"];
         put?: never;
         post?: never;
@@ -203,15 +206,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connect": {
+    "/api/config": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Addresses the connection instructions are rendered from. */
-        get: operations["getConnectInfo"];
+        /** The deployment's settings a signed-in user's interface is rendered with: where the proxied API is, and what the cabinet may show. Every such value lives here. */
+        get: operations["getConfig"];
         put?: never;
         post?: never;
         delete?: never;
@@ -585,6 +588,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminConfig"];
+        /** Replace them. Applies to every user from their next request; the change is audited. */
+        put: operations["replaceAdminConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -680,7 +700,7 @@ export interface components {
                 requests: number;
                 /** @description Every token spent, including tokens of failed or retried attempts. */
                 tokensTotal: number;
-                cost: components["schemas"]["CostSummary"];
+                cost?: components["schemas"]["CostSummary"];
             };
             points: {
                 /**
@@ -696,7 +716,7 @@ export interface components {
                  * Format: double
                  * @description The priced part of this bucket's spend, as in `totals.cost.totalUSD`.
                  */
-                costUSD: number;
+                costUSD?: number;
             }[];
         };
         /** @description What the tokens would have cost at the vendor's list prices, in US dollars: an estimate of work done, not a bill. Each request is priced when it is served, at the prices in force then, so a later price change does not rewrite history. */
@@ -734,9 +754,15 @@ export interface components {
             /** @description Tokens with no price when served (a model missing from the price list, or tokens the vendor did not classify). They are not in `totalUSD`, not counted as free. */
             unpricedTokens: number;
         };
-        ConnectInfo: {
+        Config: {
             /** @description Public base URL of the proxied API, without a trailing slash. */
             apiBaseURL: string;
+            /** @description Whether the cabinet shows the caller costs in US dollars, in usage and in spend limits. Always true for an administrator; for everyone else it is `AdminConfig.costsVisible`. When false the caller is shown tokens and each limit's share only. */
+            costsVisible: boolean;
+        };
+        AdminConfig: {
+            /** @description Show users their costs in US dollars: in the cabinet, and the amount in the proxied API's spend-limit refusal. Off by default. */
+            costsVisible: boolean;
         };
         AdminUser: {
             /** Format: uuid */
@@ -1071,6 +1097,7 @@ export interface components {
              * @description Spent in the live window; 0 when none is live.
              */
             spentUsd: number;
+            spentPercent: components["schemas"]["SpentPercent"];
             /**
              * Format: date-time
              * @description Null: no live window; the next request opens one.
@@ -1081,6 +1108,8 @@ export interface components {
             /** @description Requests are refused until resetsAt. */
             exhausted: boolean;
         };
+        /** @description Share of the limit spent in the live window, in whole percent rounded down: 100 exactly when the window is exhausted, 0 when none is live. */
+        SpentPercent: number;
         SpendLimits: {
             /**
              * @description `default` inherits the global set; `custom` is the account's own.
@@ -1091,6 +1120,33 @@ export interface components {
             custom: components["schemas"]["SpendLimit"][];
             /** @description Every rule in force with its window, shortest window first. */
             windows: components["schemas"]["SpendWindow"][];
+        };
+        MySpendWindow: {
+            windowMinutes: number;
+            spentPercent: components["schemas"]["SpentPercent"];
+            /**
+             * Format: double
+             * @description The limit; present only while `Config.costsVisible` is true.
+             */
+            amountUsd?: number;
+            /**
+             * Format: double
+             * @description Spent in the live window, 0 when none is live; present only while `Config.costsVisible` is true.
+             */
+            spentUsd?: number;
+            /**
+             * Format: date-time
+             * @description Null: no live window; the next request opens one.
+             */
+            startedAt: string | null;
+            /** Format: date-time */
+            resetsAt: string | null;
+            /** @description Requests are refused until resetsAt. */
+            exhausted: boolean;
+        };
+        MySpendLimits: {
+            /** @description Every rule in force with its window, shortest window first. */
+            windows: components["schemas"]["MySpendWindow"][];
         };
         SpendLimitsUpdate: {
             /** @enum {string} */
@@ -1426,7 +1482,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Aggregated consumption for the caller. */
+            /** @description Aggregated consumption for the caller. `totals.cost` and every `points[].costUSD` are present only while `Config.costsVisible` is true; otherwise the answer carries tokens and requests alone. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1472,12 +1528,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SpendLimits"];
+                    "application/json": components["schemas"]["MySpendLimits"];
                 };
             };
         };
     };
-    getConnectInfo: {
+    getConfig: {
         parameters: {
             query?: never;
             header?: never;
@@ -1486,13 +1542,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deployment addresses. The client holds the per-tool templates. */
+            /** @description The settings in force. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConnectInfo"];
+                    "application/json": components["schemas"]["Config"];
                 };
             };
         };
@@ -2435,6 +2491,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings an administrator edits for what users are shown. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminConfig"];
+                };
+            };
+        };
+    };
+    replaceAdminConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminConfig"];
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminConfig"];
                 };
             };
         };

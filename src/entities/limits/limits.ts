@@ -5,6 +5,8 @@ import type { components } from "../../shared/api/schema";
 export type SpendLimit = components["schemas"]["SpendLimit"];
 export type SpendWindow = components["schemas"]["SpendWindow"];
 export type SpendLimits = components["schemas"]["SpendLimits"];
+/** A window as its user sees it: the dollar amounts only while costs are visible. */
+export type MySpendWindow = components["schemas"]["MySpendWindow"];
 
 export const myLimitsQuery = queryOptions({
   queryKey: ["myLimits"],

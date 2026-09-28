@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { configQuery } from "../../../entities/config/config";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { renderApp } from "../../../test/render";
@@ -144,6 +145,34 @@ describe("gateway settings", () => {
       fill(en["settings.errorField"], { error: en["error.forbidden_setting"], field: "port" }),
     );
     expect(screen.getByRole("button", { name: en["settings.apply"] })).toBeDisabled();
+  });
+});
+
+describe("costs shown to users", () => {
+  it("reads the setting, saves the switched value and shows what the server kept", async () => {
+    settingsScreen();
+    let stored: Schemas["AdminConfig"] = { costsVisible: false };
+    const puts: Schemas["AdminConfig"][] = [];
+    server.use(
+      http.get("/api/admin/config", ({ response }) => response(200).json(stored)),
+      http.put("/api/admin/config", async ({ request, response }) => {
+        stored = await request.json();
+        puts.push(stored);
+        return response(200).json(stored);
+      }),
+    );
+    const user = userEvent.setup();
+    const { queryClient } = renderApp("/admin/settings");
+    // A config the interface already holds must be fetched again after the change.
+    queryClient.setQueryData(configQuery.queryKey, fixtures.config());
+
+    const toggle = await screen.findByRole("switch", { name: en["settings.costsVisible"] });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    await user.click(toggle);
+
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+    expect(puts).toEqual([{ costsVisible: true }]);
+    expect(queryClient.getQueryState(configQuery.queryKey)?.isInvalidated).toBe(true);
   });
 });
 

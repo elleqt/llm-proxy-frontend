@@ -9,15 +9,18 @@ export const http = createOpenApiHttp<paths>({ baseUrl: location.origin });
 
 /**
  * Tests register handlers per case with `server.use(...)`; unmatched requests
- * fail. The standing answers: the signed-in user may use some models and has
- * no spend limits, which every cabinet and connect screen asks. A test about
- * either overrides it.
+ * fail. The standing answers: the deployment's config (costs hidden from users),
+ * the signed-in user may use some models and has no spend limits, which every
+ * cabinet and connect screen asks, and the administrator's config. A test about
+ * any of them overrides it.
  */
 export const server = setupServer(
+  http.get("/api/config", ({ response }) => response(200).json(fixtures.config())),
   http.get("/api/me/models", ({ response }) =>
     response(200).json({ providers: [{ name: "claude", models: ["claude-sonnet-5"] }] }),
   ),
-  http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.spendLimits())),
+  http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.myLimits())),
+  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible: false })),
 );
 
 /**
@@ -31,6 +34,12 @@ export function errorResponse(status: number, body: ErrorBody) {
 export type Schemas = components["schemas"];
 
 export const fixtures = {
+  /** A deployment that keeps costs from users, as it does by default. */
+  config: (overrides: Partial<Schemas["Config"]> = {}): Schemas["Config"] => ({
+    apiBaseURL: "https://llm.example.com",
+    costsVisible: false,
+    ...overrides,
+  }),
   me: (overrides: Partial<Schemas["Me"]> = {}): Schemas["Me"] => ({
     id: "00000000-0000-4000-8000-000000000001",
     kind: "human",
@@ -109,6 +118,21 @@ export const fixtures = {
     windowMinutes: 120,
     amountUsd: 10,
     spentUsd: 0,
+    spentPercent: 0,
+    startedAt: null,
+    resetsAt: null,
+    exhausted: false,
+    ...overrides,
+  }),
+  /** The user's own limits: nothing in force. */
+  myLimits: (overrides: Partial<Schemas["MySpendLimits"]> = {}): Schemas["MySpendLimits"] => ({
+    windows: [],
+    ...overrides,
+  }),
+  /** The user's window with none live, as seen while costs are hidden: no dollars. */
+  mySpendWindow: (overrides: Partial<Schemas["MySpendWindow"]> = {}): Schemas["MySpendWindow"] => ({
+    windowMinutes: 120,
+    spentPercent: 0,
     startedAt: null,
     resetsAt: null,
     exhausted: false,

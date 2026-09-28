@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
+import { useConfig } from "../../entities/config/config";
 import { tokensQuery, type Token } from "../../entities/token/tokens";
 import { PERIODS, usageQuery, usageSeries, type ModelUsage, type Period, type Usage } from "../../entities/usage/usage";
 import { IssueToken } from "../../features/issue-token/IssueToken";
@@ -118,27 +119,33 @@ function Tokens() {
 function UsageSection() {
   const t = useT();
   const [period, setPeriod] = useState<Period>("24h");
-  const [unit, setUnit] = useState<UsageUnit>(storedUsageUnit);
+  const [chosenUnit, setChosenUnit] = useState<UsageUnit>(storedUsageUnit);
+  // Dollars only once the deployment says this user may see them; until then
+  // tokens. The stored choice is kept for when they may.
+  const costsVisible = useConfig().data?.costsVisible === true;
+  const unit = costsVisible ? chosenUnit : "tokens";
   return (
     <Card
       title={t("usage.title")}
       actions={
         <>
-          <div role="group" aria-label={t("usage.unit")} className={styles.periods}>
-            {USAGE_UNITS.map((value) => (
-              <Button
-                key={value}
-                aria-pressed={value === unit}
-                className={styles.period}
-                onClick={() => {
-                  storeUsageUnit(value);
-                  setUnit(value);
-                }}
-              >
-                {t(`usage.unit.${value}`)}
-              </Button>
-            ))}
-          </div>
+          {costsVisible && (
+            <div role="group" aria-label={t("usage.unit")} className={styles.periods}>
+              {USAGE_UNITS.map((value) => (
+                <Button
+                  key={value}
+                  aria-pressed={value === unit}
+                  className={styles.period}
+                  onClick={() => {
+                    storeUsageUnit(value);
+                    setChosenUnit(value);
+                  }}
+                >
+                  {t(`usage.unit.${value}`)}
+                </Button>
+              ))}
+            </div>
+          )}
           <div role="group" aria-label={t("usage.period")} className={styles.periods}>
             {PERIODS.map((value) => (
               <Button
@@ -194,7 +201,7 @@ function UsageBody({ period, unit }: { period: Period; unit: UsageUnit }) {
           <dd>{number.format(usage.data.totals.tokensTotal)}</dd>
         </div>
       </dl>
-      {usd && <CostSummary cost={usage.data.totals.cost} />}
+      {usd && usage.data.totals.cost !== undefined && <CostSummary cost={usage.data.totals.cost} />}
       <Chart
         label={t(usd ? "usage.chartCost" : "usage.chart")}
         data={usd ? series.cost : series.tokens}
@@ -207,7 +214,7 @@ function UsageBody({ period, unit }: { period: Period; unit: UsageUnit }) {
 }
 
 /** The period's estimated cost, its parts, the prompt cache's effect and what could not be priced. */
-function CostSummary({ cost }: { cost: Usage["totals"]["cost"] }) {
+function CostSummary({ cost }: { cost: NonNullable<Usage["totals"]["cost"]> }) {
   const t = useT();
   const [lang] = useLang();
   const money = (amount: number) => formatUSD(lang, amount);

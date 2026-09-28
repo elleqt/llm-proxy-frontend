@@ -9,7 +9,6 @@ function signedIn(me: Schemas["Me"]) {
     http.get("/api/me", ({ response }) => response(200).json(me)),
     http.get("/api/me/tokens", ({ response }) => response(200).json([])),
     http.get("/api/me/usage", ({ response }) => response(200).json(fixtures.usage())),
-    http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
   );
 }
 
