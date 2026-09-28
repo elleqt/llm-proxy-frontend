@@ -349,23 +349,44 @@ function diffOf(before: string, after: string): string {
 
 // ---- Spend limits ------------------------------------------------------------
 
-/** The global defaults: none, as on a fresh install. */
-let defaultLimits: Schemas["SpendLimit"][] = [];
+/** The global defaults: two windows at once, the example the README gives. */
+let defaultLimits: Schemas["SpendLimit"][] = [
+  { windowMinutes: 120, amountUsd: 10 },
+  { windowMinutes: 1440, amountUsd: 30 },
+];
 /** Each account's own set; an account absent from it inherits the defaults. */
 const userLimits = new Map<string, Schemas["SpendLimit"][]>();
+/** Windows an administrator reset, by account; the next view shows them waiting for a request. */
+const resetWindows = new Map<string, Set<number>>();
 
 /**
- * An account's limits as the backend shows them. The mock records no spend, so
- * no window is ever live: resetting one answers the same view.
+ * An account's limits as the backend shows them. The mock records no spend of
+ * its own: every window it has not been told was reset is live, opened a third
+ * of its length ago, with a made-up share spent that shrinks as windows grow.
  */
 function limitsView(userId: string): Schemas["SpendLimits"] {
   const own = userLimits.get(userId);
+  const reset = resetWindows.get(userId);
   return {
     mode: own === undefined ? "default" : "custom",
     custom: own ?? [],
     windows: [...(own ?? defaultLimits)]
       .sort((a, b) => a.windowMinutes - b.windowMinutes)
-      .map((rule) => ({ ...rule, spentUsd: 0, spentPercent: 0, startedAt: null, resetsAt: null, exhausted: false })),
+      .map((rule, i) => {
+        if (reset?.has(rule.windowMinutes)) {
+          return { ...rule, spentUsd: 0, spentPercent: 0, startedAt: null, resetsAt: null, exhausted: false };
+        }
+        const share = [0.41, 0.27, 0.12][i] ?? 0.05;
+        const started = Date.now() - (rule.windowMinutes * 60_000) / 3;
+        return {
+          ...rule,
+          spentUsd: Math.round(rule.amountUsd * share * 100) / 100,
+          spentPercent: Math.floor(share * 100),
+          startedAt: new Date(started).toISOString(),
+          resetsAt: new Date(started + rule.windowMinutes * 60_000).toISOString(),
+          exhausted: false,
+        };
+      }),
   };
 }
 
@@ -806,7 +827,10 @@ const handlers = [
     if (windowMinutes !== undefined && !view.windows.some((w) => w.windowMinutes === windowMinutes)) {
       return response(422).json({ code: "invalid_input", message: "", field: "windowMinutes" });
     }
-    return response(200).json(view);
+    const reset = resetWindows.get(params.userId) ?? new Set<number>();
+    for (const w of view.windows) if (windowMinutes === undefined || w.windowMinutes === windowMinutes) reset.add(w.windowMinutes);
+    resetWindows.set(params.userId, reset);
+    return response(200).json(limitsView(params.userId));
   }),
   http.get("/api/admin/catalog", ({ response }) => response(200).json(CATALOG)),
   http.post("/api/admin/policy/preview", async ({ request, response }) =>
