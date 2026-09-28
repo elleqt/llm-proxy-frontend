@@ -24,12 +24,3 @@ export function windowText(minutes: number, t: (key: MessageKey) => string, lang
   const { count, unit } = windowParts(minutes);
   return `${count} ${unitLabel(unit, count, t, lang)}`;
 }
-
-export function money(usd: number, lang: string): string {
-  return new Intl.NumberFormat(lang, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(usd);
-}

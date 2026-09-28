@@ -41,3 +41,9 @@
   font-size: 0.875rem;
   color: var(--dim);
 }
+
+.times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}

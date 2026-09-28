@@ -44,11 +44,11 @@ describe("SpendLimitsEditor", () => {
     const { user } = editor([{ windowMinutes: 1440, amountUsd: 10 }]);
     const unit = row(1).getByRole("combobox", { name: en["limits.windowUnit"] });
 
-    expect(within(unit).getByRole("option", { selected: true })).toHaveTextContent(en["limits.unit.days.one"]);
+    expect(within(unit).getByRole("option", { selected: true })).toHaveTextContent(/^day$/);
     const count = row(1).getByRole("textbox", { name: en["limits.windowCount"] });
     await user.clear(count);
     await user.type(count, "3");
-    expect(within(unit).getByRole("option", { selected: true })).toHaveTextContent(en["limits.unit.days.other"]);
+    expect(within(unit).getByRole("option", { selected: true })).toHaveTextContent(/^days$/);
   });
 
   it("saves an amount typed with a decimal comma", async () => {

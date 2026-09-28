@@ -62,8 +62,8 @@ const REFUSED_FIELDS: Record<string, Field> = { windowMinutes: "window", amountU
 /**
  * A set of spend limits, each "amount per window". Saves the whole set at
  * once; the caller owns the request, and passes its failure back as `error`.
- * `onEdit` reports each change to the rows: a refusal names a row by its
- * position, so the caller drops it once the rows may have moved.
+ * `onEdit` reports each change to the rows: a refusal is about the values
+ * that were submitted, so the caller drops it once the user changes them.
  */
 export function SpendLimitsEditor({
   value,

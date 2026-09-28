@@ -489,6 +489,14 @@ describe("spend limits", () => {
     resetsAt: "2026-09-28T12:00:00Z",
   });
   const IDLE = fixtures.spendWindow({ windowMinutes: 2880, amountUsd: 50 });
+  const LIVE_PER = "$10.00 per 2 hours";
+  const resetLive = fill(en["limits.resetLabel"], { window: LIVE_PER });
+
+  /** Focus sits on the window list holding `inside`, not dropped to the page. */
+  function expectFocusOnWindows(inside: HTMLElement) {
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toContainElement(inside);
+  }
 
   async function limitsCard() {
     return within(await screen.findByRole("region", { name: en["limits.title"] }));
@@ -533,9 +541,32 @@ describe("spend limits", () => {
     await user.click(limits.getByRole("button", { name: en["limits.save"] }));
 
     await waitFor(() => expect(limitPuts).toEqual([{ mode: "default" }]));
-    // Saved: nothing is left to save while Default is the stored mode.
+    // Saved: nothing is left to save while Default is the stored mode, and
+    // focus moves from the gone button to the mode now stored.
     await waitFor(() => expect(limits.queryByRole("button", { name: en["limits.save"] })).not.toBeInTheDocument());
     expect(limits.getByRole("radio", { name: en["limits.modeDefault"] })).toBeChecked();
+    expect(limits.getByRole("radio", { name: en["limits.modeDefault"] })).toHaveFocus();
+  });
+
+  it("shows a refused return to the defaults, and keeps the own limits", async () => {
+    const own = { windowMinutes: 60, amountUsd: 5 };
+    card({ limits: fixtures.spendLimits({ mode: "custom", custom: [own], windows: [fixtures.spendWindow(own)] }) });
+    server.use(
+      http.put("/api/admin/users/{userId}/limits", ({ response }) =>
+        response(422).json({ code: "invalid_input", message: "", field: "mode" }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(`/admin/users/${ID}`);
+    const limits = await limitsCard();
+
+    await user.click(await limits.findByRole("radio", { name: en["limits.modeDefault"] }));
+    await user.click(limits.getByRole("button", { name: en["limits.save"] }));
+
+    expect(await limits.findByRole("alert")).toHaveTextContent(en["error.invalid_input"]);
+    expect(limits.getByRole("button", { name: en["limits.save"] })).toBeInTheDocument();
+    await user.click(limits.getByRole("radio", { name: en["limits.modeCustom"] }));
+    expect(limits.getByRole("textbox", { name: en["limits.windowCount"] })).toHaveValue("1");
   });
 
   it("clears a refusal on a row once the rows are edited again", async () => {
@@ -576,19 +607,20 @@ describe("spend limits", () => {
     renderApp(`/admin/users/${ID}`);
     const limits = await limitsCard();
 
-    // Only the live window can be reset.
-    const reset = await limits.findAllByRole("button", { name: en["limits.reset"] });
-    expect(reset).toHaveLength(1);
-    await user.click(reset[0] as HTMLElement);
-    const dialog = screen.getByRole("dialog", { name: en["limits.resetTitle"] });
+    // Only the live window can be reset, and its button says which window.
+    expect(await limits.findAllByRole("button", { name: new RegExp(`^${en["limits.resetLabel"].split("{window}")[0]}`) })).toHaveLength(1);
+    await user.click(limits.getByRole("button", { name: resetLive }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["limits.resetTitle"], { window: LIVE_PER }) });
     expect(resets).toEqual([]);
     await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(resets).toEqual([{ windowMinutes: 120 }]);
     expect(limits.getAllByText(en["limits.opensWithRequest"])).toHaveLength(2);
-    expect(limits.queryByRole("button", { name: en["limits.reset"] })).not.toBeInTheDocument();
+    expect(limits.queryByRole("button", { name: resetLive })).not.toBeInTheDocument();
     expect(limits.queryByRole("button", { name: en["limits.resetAll"] })).not.toBeInTheDocument();
+    // The reset button is gone; focus lands on the windows, not the page.
+    expectFocusOnWindows(limits.getByText(LIVE_PER));
   });
 
   it("resets every window at once", async () => {
@@ -599,11 +631,12 @@ describe("spend limits", () => {
 
     await user.click(await limits.findByRole("button", { name: en["limits.resetAll"] }));
     const dialog = screen.getByRole("dialog", { name: en["limits.resetAllTitle"] });
-    await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["limits.resetAllConfirm"] }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(resets).toEqual([{}]);
     expect(limits.getAllByText(en["limits.opensWithRequest"])).toHaveLength(2);
+    expectFocusOnWindows(limits.getByText(LIVE_PER));
   });
 
   it("shows a refused reset inside the confirmation, and the window stays live", async () => {
@@ -617,8 +650,8 @@ describe("spend limits", () => {
     renderApp(`/admin/users/${ID}`);
     const limits = await limitsCard();
 
-    await user.click(await limits.findByRole("button", { name: en["limits.reset"] }));
-    const dialog = screen.getByRole("dialog", { name: en["limits.resetTitle"] });
+    await user.click(await limits.findByRole("button", { name: resetLive }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["limits.resetTitle"], { window: LIVE_PER }) });
     await user.click(within(dialog).getByRole("button", { name: en["limits.resetConfirm"] }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.invalid_input"]);
