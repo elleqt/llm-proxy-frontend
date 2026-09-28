@@ -347,6 +347,43 @@ function diffOf(before: string, after: string): string {
   return removed.length + added.length === 0 ? "" : `--- running\n+++ proposed\n${[...removed, ...added].join("\n")}\n`;
 }
 
+// ---- Spend limits ------------------------------------------------------------
+
+/** The global defaults: none, as on a fresh install. */
+let defaultLimits: Schemas["SpendLimit"][] = [];
+/** Each account's own set; an account absent from it inherits the defaults. */
+const userLimits = new Map<string, Schemas["SpendLimit"][]>();
+
+/**
+ * An account's limits as the backend shows them. The mock records no spend, so
+ * no window is ever live: resetting one answers the same view.
+ */
+function limitsView(userId: string): Schemas["SpendLimits"] {
+  const own = userLimits.get(userId);
+  return {
+    mode: own === undefined ? "default" : "custom",
+    custom: own ?? [],
+    windows: [...(own ?? defaultLimits)]
+      .sort((a, b) => a.windowMinutes - b.windowMinutes)
+      .map((rule) => ({ ...rule, spentUsd: 0, startedAt: null, resetsAt: null, exhausted: false })),
+  };
+}
+
+/** The backend's rules for a set of limits: the offending field, relative to the list, or undefined. */
+function limitsError(limits: Schemas["SpendLimit"][]): string | undefined {
+  if (limits.length > 10) return "limits";
+  const seen = new Set<number>();
+  for (const [i, rule] of limits.entries()) {
+    const { windowMinutes } = rule;
+    if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 525_600 || seen.has(windowMinutes)) {
+      return `[${i}].windowMinutes`;
+    }
+    seen.add(windowMinutes);
+    if (!(rule.amountUsd > 0 && rule.amountUsd <= 1_000_000)) return `[${i}].amountUsd`;
+  }
+  return undefined;
+}
+
 // The price catalog: a few dozen models, as an automatic source would publish them.
 const CATALOG_PRICES: Schemas["ModelPrice"][] = [
   ...[
@@ -614,6 +651,9 @@ const handlers = [
     const from = new Date(query.get("from") ?? to.getTime() - 7 * 24 * HOUR);
     return response(200).json(usage(from, to));
   }),
+  http.get("/api/me/limits", ({ response }) =>
+    me === null ? response.untyped(unauthenticated()) : response(200).json(limitsView(me.id)),
+  ),
   http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
   http.get("/api/admin/users", ({ response }) => response(200).json(users)),
   http.post("/api/admin/users", async ({ request, response }) => {
@@ -721,6 +761,34 @@ const handlers = [
   http.get("/api/admin/users/{userId}/activity", ({ params, response }) => {
     const user = users.find((u) => u.id === params.userId);
     return user === undefined ? response.untyped(notFound()) : response(200).json(activity(user));
+  }),
+  http.get("/api/admin/users/{userId}/limits", ({ params, response }) =>
+    users.some((u) => u.id === params.userId)
+      ? response(200).json(limitsView(params.userId))
+      : response.untyped(notFound()),
+  ),
+  http.put("/api/admin/users/{userId}/limits", async ({ params, request, response }) => {
+    const body = await request.json();
+    if (!users.some((u) => u.id === params.userId)) return response.untyped(notFound());
+    if (body.mode === "default") {
+      if (body.limits !== undefined) return response(422).json({ code: "invalid_input", message: "", field: "limits" });
+      userLimits.delete(params.userId);
+    } else {
+      if (body.limits === undefined) return response(422).json({ code: "invalid_input", message: "", field: "limits" });
+      const field = limitsError(body.limits);
+      if (field !== undefined) return response(422).json({ code: "invalid_input", message: "", field });
+      userLimits.set(params.userId, body.limits);
+    }
+    return response(200).json(limitsView(params.userId));
+  }),
+  http.post("/api/admin/users/{userId}/limits/reset", async ({ params, request, response }) => {
+    const { windowMinutes } = await request.json();
+    if (!users.some((u) => u.id === params.userId)) return response.untyped(notFound());
+    const view = limitsView(params.userId);
+    if (windowMinutes !== undefined && !view.windows.some((w) => w.windowMinutes === windowMinutes)) {
+      return response(422).json({ code: "invalid_input", message: "", field: "windowMinutes" });
+    }
+    return response(200).json(view);
   }),
   http.get("/api/admin/catalog", ({ response }) => response(200).json(CATALOG)),
   http.post("/api/admin/policy/preview", async ({ request, response }) =>
@@ -835,6 +903,14 @@ const handlers = [
     const diff = diffOf(settings.yaml, yaml);
     if (!body.dryRun) settings = next;
     return response(200).json({ applied: !body.dryRun, diff, settings: next });
+  }),
+  http.get("/api/admin/limits", ({ response }) => response(200).json(defaultLimits)),
+  http.put("/api/admin/limits", async ({ request, response }) => {
+    const body = await request.json();
+    const field = limitsError(body);
+    if (field !== undefined) return response(422).json({ code: "invalid_input", message: "", field });
+    defaultLimits = body;
+    return response(200).json(defaultLimits);
   }),
   http.get("/api/admin/prices", ({ response }) => response(200).json(priceList())),
   http.put("/api/admin/prices", async ({ request, response }) => {

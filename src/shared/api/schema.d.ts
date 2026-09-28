@@ -186,6 +186,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's spend limits in force and the state of each window. */
+        get: operations["getMyLimits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connect": {
         parameters: {
             query?: never;
@@ -312,6 +329,39 @@ export interface paths {
         get: operations["getUserActivity"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{userId}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUserLimits"];
+        put: operations["setUserLimits"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{userId}/limits/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close one window of the account, or all of them. The next request opens a new window with nothing spent; the usage history is kept. */
+        post: operations["resetUserLimits"];
         delete?: never;
         options?: never;
         head?: never;
@@ -512,6 +562,23 @@ export interface paths {
         put?: never;
         /** Check the price catalog now instead of waiting for the next scheduled check. The outcome is in `catalog`: a failure sets `lastError` and keeps the prices in force. */
         post: operations["refreshPriceCatalog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDefaultLimits"];
+        /** Replace the global defaults. An empty list means no limits by default. */
+        put: operations["replaceDefaultLimits"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -764,6 +831,8 @@ export interface components {
                 /** @description The provider name as written in policy rules. */
                 name: string;
                 models: string[];
+                /** @description GET /api/me/models only: models the policy admits but the caller's spend limits block for want of a price. Disjoint from models. */
+                unpriced?: string[];
             }[];
         };
         PolicyPreviewRequest: {
@@ -983,6 +1052,55 @@ export interface components {
             /** @description Ordered by provider, then model. */
             prices: components["schemas"]["PriceEntry"][];
             catalog: components["schemas"]["PriceCatalog"];
+        };
+        SpendLimit: {
+            /** @description The window in whole minutes. */
+            windowMinutes: number;
+            /**
+             * Format: double
+             * @description US dollars the account may spend within one window: above 0, at most 1000000.
+             */
+            amountUsd: number;
+        };
+        SpendWindow: {
+            windowMinutes: number;
+            /** Format: double */
+            amountUsd: number;
+            /**
+             * Format: double
+             * @description Spent in the live window; 0 when none is live.
+             */
+            spentUsd: number;
+            /**
+             * Format: date-time
+             * @description Null: no live window; the next request opens one.
+             */
+            startedAt: string | null;
+            /** Format: date-time */
+            resetsAt: string | null;
+            /** @description Requests are refused until resetsAt. */
+            exhausted: boolean;
+        };
+        SpendLimits: {
+            /**
+             * @description `default` inherits the global set; `custom` is the account's own.
+             * @enum {string}
+             */
+            mode: "default" | "custom";
+            /** @description The account's own set; empty in `default` mode, and in `custom` mode for an account without limits. */
+            custom: components["schemas"]["SpendLimit"][];
+            /** @description Every rule in force with its window, shortest window first. */
+            windows: components["schemas"]["SpendWindow"][];
+        };
+        SpendLimitsUpdate: {
+            /** @enum {string} */
+            mode: "default" | "custom";
+            /** @description Required with `custom` (empty means no limits); refused with `default`. */
+            limits?: components["schemas"]["SpendLimit"][];
+        };
+        SpendLimitReset: {
+            /** @description The window to reset; absent resets every window. */
+            windowMinutes?: number;
         };
     };
     responses: never;
@@ -1328,13 +1446,33 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Providers in name order, models sorted within each; a provider with no allowed model is absent. Empty when the policy allows nothing today. */
+            /** @description Providers in name order, models sorted within each; a provider with neither an allowed nor an unpriced model is absent. Empty when the policy allows nothing today. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Catalog"];
+                };
+            };
+        };
+    };
+    getMyLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every rule in force, shortest window first; `windows` is empty when none applies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimits"];
                 };
             };
         };
@@ -1663,6 +1801,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Activity"];
+                };
+            };
+        };
+    };
+    getUserLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's mode, own set and windows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimits"];
+                };
+            };
+            /** @description `not_found`: no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setUserLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendLimitsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Applied from the account's next request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimits"];
+                };
+            };
+            /** @description `not_found`: no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `invalid_input`: `field` is `limits` (missing with `custom`, present with `default`, or more than 10 entries) or an entry of it relative to `limits`, e.g. `[1].windowMinutes`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    resetUserLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendLimitReset"];
+            };
+        };
+        responses: {
+            /** @description Reset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimits"];
+                };
+            };
+            /** @description `not_found`: no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `invalid_input` on `windowMinutes`: no rule in force has that window. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -2120,6 +2377,59 @@ export interface operations {
             };
             /** @description `catalog_disabled` - no catalog source is configured. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getDefaultLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The global spend limits every account without its own set inherits. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimit"][];
+                };
+            };
+        };
+    };
+    replaceDefaultLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendLimit"][];
+            };
+        };
+        responses: {
+            /** @description Replaced; applies from the next request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendLimit"][];
+                };
+            };
+            /** @description `invalid_input` with `field` naming the entry, e.g. `[1].windowMinutes` (outside 1..525600 or repeated), `[0].amountUsd` (not above 0, or above 1000000), or `limits` (more than 10 entries). Nothing is replaced. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

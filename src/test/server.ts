@@ -9,13 +9,15 @@ export const http = createOpenApiHttp<paths>({ baseUrl: location.origin });
 
 /**
  * Tests register handlers per case with `server.use(...)`; unmatched requests
- * fail. The one standing answer: the signed-in user may use some models, which
- * every cabinet and connect screen asks. A test about that list overrides it.
+ * fail. The standing answers: the signed-in user may use some models and has
+ * no spend limits, which every cabinet and connect screen asks. A test about
+ * either overrides it.
  */
 export const server = setupServer(
   http.get("/api/me/models", ({ response }) =>
     response(200).json({ providers: [{ name: "claude", models: ["claude-sonnet-5"] }] }),
   ),
+  http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.spendLimits())),
 );
 
 /**
@@ -94,5 +96,22 @@ export const fixtures = {
       { name: "claude", models: ["claude-sonnet-5", "claude-opus-5"] },
       { name: "chatgpt", models: ["gpt-6"] },
     ],
+  }),
+  /** Limits inherited from empty defaults: nothing in force. */
+  spendLimits: (overrides: Partial<Schemas["SpendLimits"]> = {}): Schemas["SpendLimits"] => ({
+    mode: "default",
+    custom: [],
+    windows: [],
+    ...overrides,
+  }),
+  /** A rule's window with none live: nothing spent, the next request opens one. */
+  spendWindow: (overrides: Partial<Schemas["SpendWindow"]> = {}): Schemas["SpendWindow"] => ({
+    windowMinutes: 120,
+    amountUsd: 10,
+    spentUsd: 0,
+    startedAt: null,
+    resetsAt: null,
+    exhausted: false,
+    ...overrides,
   }),
 };
