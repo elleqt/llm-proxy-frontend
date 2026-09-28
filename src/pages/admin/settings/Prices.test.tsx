@@ -67,6 +67,7 @@ function pricesScreen(list: Schemas["PriceList"] = LIST, answer: Schemas["PriceL
       response(200).json({ yaml: "", fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30 } }),
     ),
     http.get("/api/admin/prices", ({ response }) => response(200).json(list)),
+    http.get("/api/admin/limits", ({ response }) => response(200).json([])),
     http.put("/api/admin/prices", async ({ request, response }) => {
       puts.push(await request.json());
       return response(200).json(answer);

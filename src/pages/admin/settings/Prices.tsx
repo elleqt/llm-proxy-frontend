@@ -9,6 +9,7 @@ import {
 } from "../../../entities/settings/settings";
 import { ApiError, client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../../shared/i18n";
+import { parseDecimal } from "../../../shared/lib/decimal";
 import { fill } from "../../../shared/lib/template";
 import { Badge, Button, Card, EmptyState, Modal, Spinner, Table, TextField, type Column } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -16,15 +17,6 @@ import styles from "../admin.module.css";
 
 const RATES = ["input", "output", "cacheRead", "cacheWrite"] as const;
 type Rate = (typeof RATES)[number];
-
-/**
- * A price as typed: a plain decimal of 0 or more, with a point or a comma
- * (as typed in Russian), else `undefined`. No signs, exponents or hex.
- */
-function parsePrice(text: string): number | undefined {
-  const trimmed = text.trim();
-  return /^\d+([.,]\d+)?$/.test(trimmed) ? Number(trimmed.replace(",", ".")) : undefined;
-}
 
 /** "3 hours ago", "in 5 minutes": the largest whole unit. */
 function relativeTime(iso: string, lang: string): string {
@@ -288,7 +280,7 @@ function PriceDialog({
     event.preventDefault();
     const provider = values.provider.trim();
     const model = values.model.trim();
-    const rates = Object.fromEntries(RATES.map((rate) => [rate, parsePrice(values[rate])])) as Record<
+    const rates = Object.fromEntries(RATES.map((rate) => [rate, parseDecimal(values[rate])])) as Record<
       Rate,
       number | undefined
     >;

@@ -347,6 +347,72 @@ function diffOf(before: string, after: string): string {
   return removed.length + added.length === 0 ? "" : `--- running\n+++ proposed\n${[...removed, ...added].join("\n")}\n`;
 }
 
+// ---- Spend limits ------------------------------------------------------------
+
+/** The global defaults: two windows at once, the example the README gives. */
+let defaultLimits: Schemas["SpendLimit"][] = [
+  { windowMinutes: 120, amountUsd: 10 },
+  { windowMinutes: 1440, amountUsd: 30 },
+];
+/** Each account's own set; an account absent from it inherits the defaults. */
+const userLimits = new Map<string, Schemas["SpendLimit"][]>();
+/** Windows an administrator reset, by account; the next view shows them waiting for a request. */
+const resetWindows = new Map<string, Set<number>>();
+
+/**
+ * An account's limits as the backend shows them. The mock records no spend of
+ * its own: every window it has not been told was reset is live, opened a third
+ * of its length ago, with a made-up share spent that shrinks as windows grow.
+ */
+function limitsView(userId: string): Schemas["SpendLimits"] {
+  const own = userLimits.get(userId);
+  const reset = resetWindows.get(userId);
+  return {
+    mode: own === undefined ? "default" : "custom",
+    custom: own ?? [],
+    windows: [...(own ?? defaultLimits)]
+      .sort((a, b) => a.windowMinutes - b.windowMinutes)
+      .map((rule, i) => {
+        if (reset?.has(rule.windowMinutes)) {
+          return { ...rule, spentUsd: 0, spentPercent: 0, startedAt: null, resetsAt: null, exhausted: false };
+        }
+        const share = [0.41, 0.27, 0.12][i] ?? 0.05;
+        const started = Date.now() - (rule.windowMinutes * 60_000) / 3;
+        return {
+          ...rule,
+          spentUsd: Math.round(rule.amountUsd * share * 100) / 100,
+          spentPercent: Math.floor(share * 100),
+          startedAt: new Date(started).toISOString(),
+          resetsAt: new Date(started + rule.windowMinutes * 60_000).toISOString(),
+          exhausted: false,
+        };
+      }),
+  };
+}
+
+/** The administrator's setting: users see their costs in US dollars. Off, as on a fresh install. */
+let costsVisible = false;
+
+/** Whether the signed-in caller is shown dollars: always an administrator, otherwise per the setting. */
+function costsVisibleToMe(): boolean {
+  return me?.role === "admin" || costsVisible;
+}
+
+/** The backend's rules for a set of limits: the offending field, relative to the list, or undefined. */
+function limitsError(limits: Schemas["SpendLimit"][]): string | undefined {
+  if (limits.length > 10) return "limits";
+  const seen = new Set<number>();
+  for (const [i, rule] of limits.entries()) {
+    const { windowMinutes } = rule;
+    if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 525_600 || seen.has(windowMinutes)) {
+      return `[${i}].windowMinutes`;
+    }
+    seen.add(windowMinutes);
+    if (!(rule.amountUsd > 0 && rule.amountUsd <= 1_000_000)) return `[${i}].amountUsd`;
+  }
+  return undefined;
+}
+
 // The price catalog: a few dozen models, as an automatic source would publish them.
 const CATALOG_PRICES: Schemas["ModelPrice"][] = [
   ...[
@@ -530,7 +596,7 @@ function usage(from: Date, to: Date): Schemas["Usage"] {
     totals: {
       requests: points.reduce((sum, p) => sum + p.requests, 0),
       tokensTotal: points.reduce((sum, p) => sum + p.tokensTotal, 0),
-      cost: costSummary(points.reduce((sum, p) => sum + p.costUSD, 0)),
+      cost: costSummary(points.reduce((sum, p) => sum + (p.costUSD ?? 0), 0)),
     },
     points,
   };
@@ -612,9 +678,22 @@ const handlers = [
   http.get("/api/me/usage", ({ query, response }) => {
     const to = new Date(query.get("to") ?? Date.now());
     const from = new Date(query.get("from") ?? to.getTime() - 7 * 24 * HOUR);
-    return response(200).json(usage(from, to));
+    const all = usage(from, to);
+    if (costsVisibleToMe()) return response(200).json(all);
+    // As the backend: tokens and requests alone.
+    const { cost: _cost, ...totals } = all.totals;
+    return response(200).json({ ...all, totals, points: all.points.map(({ costUSD: _costUSD, ...point }) => point) });
   }),
-  http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
+  http.get("/api/me/limits", ({ response }) => {
+    if (me === null) return response.untyped(unauthenticated());
+    const { windows } = limitsView(me.id);
+    return response(200).json({
+      windows: costsVisibleToMe() ? windows : windows.map(({ amountUsd: _amount, spentUsd: _spent, ...window }) => window),
+    });
+  }),
+  http.get("/api/config", ({ response }) =>
+    response(200).json({ apiBaseURL: "https://llm.example.com", costsVisible: costsVisibleToMe() }),
+  ),
   http.get("/api/admin/users", ({ response }) => response(200).json(users)),
   http.post("/api/admin/users", async ({ request, response }) => {
     const body = await request.json();
@@ -721,6 +800,37 @@ const handlers = [
   http.get("/api/admin/users/{userId}/activity", ({ params, response }) => {
     const user = users.find((u) => u.id === params.userId);
     return user === undefined ? response.untyped(notFound()) : response(200).json(activity(user));
+  }),
+  http.get("/api/admin/users/{userId}/limits", ({ params, response }) =>
+    users.some((u) => u.id === params.userId)
+      ? response(200).json(limitsView(params.userId))
+      : response.untyped(notFound()),
+  ),
+  http.put("/api/admin/users/{userId}/limits", async ({ params, request, response }) => {
+    const body = await request.json();
+    if (!users.some((u) => u.id === params.userId)) return response.untyped(notFound());
+    if (body.mode === "default") {
+      if (body.limits !== undefined) return response(422).json({ code: "invalid_input", message: "", field: "limits" });
+      userLimits.delete(params.userId);
+    } else {
+      if (body.limits === undefined) return response(422).json({ code: "invalid_input", message: "", field: "limits" });
+      const field = limitsError(body.limits);
+      if (field !== undefined) return response(422).json({ code: "invalid_input", message: "", field });
+      userLimits.set(params.userId, body.limits);
+    }
+    return response(200).json(limitsView(params.userId));
+  }),
+  http.post("/api/admin/users/{userId}/limits/reset", async ({ params, request, response }) => {
+    const { windowMinutes } = await request.json();
+    if (!users.some((u) => u.id === params.userId)) return response.untyped(notFound());
+    const view = limitsView(params.userId);
+    if (windowMinutes !== undefined && !view.windows.some((w) => w.windowMinutes === windowMinutes)) {
+      return response(422).json({ code: "invalid_input", message: "", field: "windowMinutes" });
+    }
+    const reset = resetWindows.get(params.userId) ?? new Set<number>();
+    for (const w of view.windows) if (windowMinutes === undefined || w.windowMinutes === windowMinutes) reset.add(w.windowMinutes);
+    resetWindows.set(params.userId, reset);
+    return response(200).json(limitsView(params.userId));
   }),
   http.get("/api/admin/catalog", ({ response }) => response(200).json(CATALOG)),
   http.post("/api/admin/policy/preview", async ({ request, response }) =>
@@ -835,6 +945,19 @@ const handlers = [
     const diff = diffOf(settings.yaml, yaml);
     if (!body.dryRun) settings = next;
     return response(200).json({ applied: !body.dryRun, diff, settings: next });
+  }),
+  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible })),
+  http.put("/api/admin/config", async ({ request, response }) => {
+    ({ costsVisible } = await request.json());
+    return response(200).json({ costsVisible });
+  }),
+  http.get("/api/admin/limits", ({ response }) => response(200).json(defaultLimits)),
+  http.put("/api/admin/limits", async ({ request, response }) => {
+    const body = await request.json();
+    const field = limitsError(body);
+    if (field !== undefined) return response(422).json({ code: "invalid_input", message: "", field });
+    defaultLimits = body;
+    return response(200).json(defaultLimits);
   }),
   http.get("/api/admin/prices", ({ response }) => response(200).json(priceList())),
   http.put("/api/admin/prices", async ({ request, response }) => {

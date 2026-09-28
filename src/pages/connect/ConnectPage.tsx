@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { connectInfoQuery } from "../../entities/connect/connectInfo";
-import { myModelsQuery } from "../../entities/user/myModels";
+import { useConfig } from "../../entities/config/config";
+import { myModelsQuery, usableProviders } from "../../entities/user/myModels";
 import { takeFreshToken, type FreshToken } from "../../entities/token/tokens";
 import { NoModelAccessNotice } from "../../features/no-model-access/NoModelAccessNotice";
 import { useErrorMessage, useT } from "../../shared/i18n";
@@ -13,7 +13,7 @@ import { snippets } from "./snippets";
 export function ConnectPage() {
   const t = useT();
   const errorMessage = useErrorMessage();
-  const info = useQuery(connectInfoQuery);
+  const info = useConfig();
   // Which of omp's providers to show; until it answers, all of them.
   const models = useQuery(myModelsQuery);
   // The key handed over by the issue dialog lives in this page's state and
@@ -39,7 +39,7 @@ export function ConnectPage() {
       info.data.apiBaseURL,
       fresh?.secret ?? placeholder,
       t("connect.modelPlaceholder"),
-      models.data?.providers.map((provider) => provider.name),
+      models.data && usableProviders(models.data).map((provider) => provider.name),
     );
     body = (
       <>

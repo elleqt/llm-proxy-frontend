@@ -71,6 +71,7 @@ function ModelList() {
         <section key={group.name} className={styles.provider} aria-labelledby={`models-${group.name}`}>
           <h3 id={`models-${group.name}`} className={styles.providerName}>
             <span>{group.name}</span>
+            {/* The count is of models the user can call; an unpriced one is listed but blocked. */}
             <Badge>{count.format(group.models.length)}</Badge>
           </h3>
           <ul className={styles.models}>
@@ -85,6 +86,11 @@ function ModelList() {
                 >
                   {copy?.ok === true && copy.model === model ? t("ui.copied") : t("ui.copy")}
                 </button>
+              </li>
+            ))}
+            {group.unpriced?.map((model) => (
+              <li key={model} className={`${styles.model} ${styles.unpriced}`}>
+                <code className={styles.id}>{model}</code> <Badge tone="muted">{t("models.unpriced")}</Badge>
               </li>
             ))}
           </ul>

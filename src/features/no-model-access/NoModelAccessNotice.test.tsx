@@ -9,7 +9,6 @@ function signedIn(me: Schemas["Me"]) {
     http.get("/api/me", ({ response }) => response(200).json(me)),
     http.get("/api/me/tokens", ({ response }) => response(200).json([])),
     http.get("/api/me/usage", ({ response }) => response(200).json(fixtures.usage())),
-    http.get("/api/connect", ({ response }) => response(200).json({ apiBaseURL: "https://llm.example.com" })),
   );
 }
 
@@ -52,6 +51,18 @@ describe("the no-model-access notice", () => {
       expect(notice).toHaveAttribute("role", "status");
       expect(notice).toHaveTextContent(en["access.askCheck"]);
     }
+  });
+
+  it("says the rules match nothing when every allowed model is unpriced", async () => {
+    signedIn(fixtures.me({ policy: ["mistral:*"], policySource: "local" }));
+    server.use(
+      http.get("/api/me/models", ({ response }) =>
+        response(200).json({ providers: [{ name: "mistral", models: [], unpriced: ["mistral-large"] }] }),
+      ),
+    );
+    await pageShown("/connect", en["page.connect.title"]);
+
+    expect(await screen.findByText(new RegExp(en["access.noMatch"]))).toHaveAttribute("role", "status");
   });
 
   it("is absent when the policy allows some model", async () => {

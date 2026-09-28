@@ -52,6 +52,11 @@
   overflow-wrap: anywhere;
 }
 
+/* Admitted by the rules but blocked by a spend limit for want of a price: listed, dimmed, not offered for copying. */
+.unpriced {
+  color: var(--dim);
+}
+
 .copy {
   flex: none;
   font: inherit;

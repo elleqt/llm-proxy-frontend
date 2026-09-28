@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMe } from "../../entities/user/me";
-import { myModelsQuery } from "../../entities/user/myModels";
+import { myModelsQuery, usableProviders } from "../../entities/user/myModels";
 import { useT } from "../../shared/i18n";
 import styles from "./NoModelAccessNotice.module.css";
 
 /**
  * Says so when the user may use no model at all: their policy is empty, or its
- * rules match nothing in today's catalogue. Every request with their keys
+ * rules match nothing in today's catalogue that has a price under their spend
+ * limits. Every request with their keys
  * would be refused. Issuing keys stays possible; they start working once
  * access is granted.
  */
@@ -15,7 +16,7 @@ export function NoModelAccessNotice() {
   const me = useMe().data;
   const noRules = me !== undefined && me.policy.length === 0;
   const models = useQuery({ ...myModelsQuery, enabled: me !== undefined && !noRules });
-  const noMatch = !noRules && models.data !== undefined && models.data.providers.length === 0;
+  const noMatch = !noRules && models.data !== undefined && usableProviders(models.data).length === 0;
 
   if (noMatch) {
     return (

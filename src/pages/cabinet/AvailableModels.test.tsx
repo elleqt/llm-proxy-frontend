@@ -67,6 +67,19 @@ describe("available models", () => {
     expect(models.getByRole("status")).toHaveTextContent(fill(en["models.copied"], { model: "gpt-6-mini" }));
   });
 
+  it("marks a model blocked for want of a price, without a copy button or a place in the count", async () => {
+    cabinet(fixtures.me(), [{ name: "vendora", models: ["a"], unpriced: ["b"] }]);
+    renderApp("/");
+    const models = await section();
+
+    const vendora = within(await models.findByRole("region", { name: "vendora1" }));
+    const [a, b] = vendora.getAllByRole("listitem");
+    expect(b).toHaveTextContent(`b ${en["models.unpriced"]}`);
+    expect(within(b as HTMLElement).queryByRole("button")).not.toBeInTheDocument();
+    expect(a).not.toHaveTextContent(en["models.unpriced"]);
+    expect(within(a as HTMLElement).getByRole("button", { name: fill(en["models.copy"], { model: "a" }) })).toBeInTheDocument();
+  });
+
   it("asks again when the user is fetched again: the rules may have changed", async () => {
     const asked = cabinet(fixtures.me(), [{ name: "claude", models: ["claude-sonnet-5"] }]);
     const { queryClient } = renderApp("/");

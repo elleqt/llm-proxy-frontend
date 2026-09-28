@@ -56,6 +56,8 @@ export function usageSeries(usage: Usage): UsageSeries {
 
   const perModel = new Map<string, { usage: ModelUsage; tokensAt: Map<number, number>; costAt: Map<number, number> }>();
   for (const point of usage.points) {
+    // Absent while costs are hidden from the caller: the cost series then stays at zero, unused.
+    const cost = point.costUSD ?? 0;
     const x = Date.parse(point.at) / 1000;
     xs.add(x);
     let entry = perModel.get(point.model);
@@ -65,9 +67,9 @@ export function usageSeries(usage: Usage): UsageSeries {
     }
     entry.usage.requests += point.requests;
     entry.usage.tokensTotal += point.tokensTotal;
-    entry.usage.costUSD += point.costUSD;
+    entry.usage.costUSD += cost;
     entry.tokensAt.set(x, (entry.tokensAt.get(x) ?? 0) + point.tokensTotal);
-    entry.costAt.set(x, (entry.costAt.get(x) ?? 0) + point.costUSD);
+    entry.costAt.set(x, (entry.costAt.get(x) ?? 0) + cost);
   }
 
   const sortedXs = [...xs].sort((a, b) => a - b);

@@ -8,6 +8,7 @@ export { CopyButton, type CopyButtonProps } from "./CopyButton";
 export { CopyField, type CopyFieldProps } from "./CopyField";
 export { DiffView, type DiffViewProps } from "./DiffView";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
+export { Meter, type MeterProps } from "./Meter";
 export { Modal, type ModalProps } from "./Modal";
 export { Select, type SelectOption, type SelectProps } from "./Select";
 export { Spinner } from "./Spinner";
