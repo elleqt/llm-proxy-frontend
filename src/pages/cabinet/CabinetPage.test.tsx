@@ -118,6 +118,20 @@ describe("spend limits", () => {
     expect(limits.getByText(/^Resets \S/)).toBeInTheDocument();
     expect(limits.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("comes first, above the keys, while limits apply", async () => {
+    cabinet([]);
+    server.use(
+      http.get("/api/me/limits", ({ response }) =>
+        response(200).json(fixtures.myLimits({ windows: [fixtures.mySpendWindow()] })),
+      ),
+    );
+    renderApp("/");
+
+    const limits = await screen.findByRole("region", { name: en["limits.title"] });
+    const keys = screen.getByRole("region", { name: en["tokens.title"] });
+    expect(limits.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe("issuing a key", () => {
