@@ -10,9 +10,19 @@ export function windowParts(minutes: number): { count: number; unit: WindowUnit 
   return { count: minutes, unit: "minutes" };
 }
 
-export function windowText(minutes: number, t: (key: MessageKey) => string): string {
+/** The plural categories the dictionaries define (English and Russian use no others). */
+type UnitForm = "one" | "few" | "many" | "other";
+
+/** The unit word in the form `count` takes in `lang`: "1 day", "2 days"; "1 день", "2 дня", "5 дней". */
+export function unitLabel(unit: WindowUnit, count: number, t: (key: MessageKey) => string, lang: string): string {
+  const category = new Intl.PluralRules(lang).select(count);
+  const form: UnitForm = category === "zero" || category === "two" ? "other" : category;
+  return t(`limits.unit.${unit}.${form}`);
+}
+
+export function windowText(minutes: number, t: (key: MessageKey) => string, lang: string): string {
   const { count, unit } = windowParts(minutes);
-  return `${count} ${t(`limits.unit.${unit}`)}`;
+  return `${count} ${unitLabel(unit, count, t, lang)}`;
 }
 
 export function money(usd: number, lang: string): string {

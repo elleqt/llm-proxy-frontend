@@ -2,9 +2,10 @@ import { useState, type FormEvent } from "react";
 import type { SpendLimit } from "../../entities/limits/limits";
 import { ApiError } from "../../shared/api/client";
 import { useErrorMessage, useLang, useT, type MessageKey } from "../../shared/i18n";
+import { parseDecimal } from "../../shared/lib/decimal";
 import { fill } from "../../shared/lib/template";
 import { Button, Select, TextField } from "../../shared/ui";
-import { UNIT_MINUTES, windowParts, type WindowUnit } from "./format";
+import { UNIT_MINUTES, unitLabel, windowParts, type WindowUnit } from "./format";
 import styles from "./SpendLimitsEditor.module.css";
 
 /** The server's rules: at most 10 limits, windows of 1 minute to 365 days, amounts above 0 up to a million. */
@@ -36,15 +37,6 @@ function toRows(value: readonly SpendLimit[], lang: string): Row[] {
   });
 }
 
-/**
- * An amount as typed: a plain decimal, with a point or a comma (as typed in
- * Russian), else `undefined`. No signs, exponents or hex.
- */
-function parseAmount(text: string): number | undefined {
-  const trimmed = text.trim();
-  return /^\d+([.,]\d+)?$/.test(trimmed) ? Number(trimmed.replace(",", ".")) : undefined;
-}
-
 /** The limits the rows stand for, or, keyed by row, what keeps them from being saved. */
 function check(rows: readonly Row[]): { limits: SpendLimit[]; errors: Record<number, RowErrors> } {
   const limits: SpendLimit[] = [];
@@ -57,7 +49,7 @@ function check(rows: readonly Row[]): { limits: SpendLimit[]; errors: Record<num
     if (!(windowMinutes >= 1 && windowMinutes <= MAX_WINDOW_MINUTES)) found.window = "limits.windowInvalid";
     else if (seen.has(windowMinutes)) found.window = "limits.duplicate";
     else seen.add(windowMinutes);
-    const amountUsd = parseAmount(row.amount);
+    const amountUsd = parseDecimal(row.amount);
     if (amountUsd === undefined || amountUsd <= 0 || amountUsd > MAX_AMOUNT_USD) found.amount = "limits.amountInvalid";
     if (found.window !== undefined || found.amount !== undefined) errors[row.key] = found;
     else if (amountUsd !== undefined) limits.push({ windowMinutes, amountUsd });
@@ -93,12 +85,15 @@ export function SpendLimitsEditor({
   const errorMessage = useErrorMessage();
   const [rows, setRows] = useState(() => toRows(value, lang));
   const [errors, setErrors] = useState<Record<number, RowErrors>>({});
+  // The keys of the rows last sent, in order: a refusal names a row by its position in them.
+  const [submitted, setSubmitted] = useState<readonly number[]>([]);
   // A new `value` (the saved set, after a save) replaces whatever is typed.
   const [seeded, setSeeded] = useState(value);
   if (seeded !== value) {
     setSeeded(value);
     setRows(toRows(value, lang));
     setErrors({});
+    setSubmitted([]);
   }
 
   const change = (next: (current: Row[]) => Row[]) => {
@@ -114,55 +109,63 @@ export function SpendLimitsEditor({
     event.preventDefault();
     const { limits, errors: found } = check(rows);
     setErrors(found);
-    if (Object.keys(found).length === 0) onSave(limits);
+    if (Object.keys(found).length > 0) return;
+    setSubmitted(rows.map((row) => row.key));
+    onSave(limits);
   };
 
-  // A refusal naming a row's field (`[n].amountUsd`) lands on that field; any other shows for the form.
+  // A refusal naming a submitted row's field (`[n].amountUsd`) lands on that field while the row
+  // is still here; any other shows for the form.
   const refused = error instanceof ApiError ? error.field?.match(/^\[(\d+)\]\.(windowMinutes|amountUsd)$/) : null;
-  const refusedKey = refused == null ? undefined : rows[Number(refused[1])]?.key;
+  const refusedKey = refused == null ? undefined : submitted[Number(refused[1])];
   const refusedField = refused == null ? undefined : REFUSED_FIELDS[refused[2] ?? ""];
+  const refusalShown = refusedKey !== undefined && rows.some((row) => row.key === refusedKey);
   const fieldError = (row: Row, field: Field) => {
     const own = errors[row.key]?.[field];
     if (own !== undefined) return t(own);
     return row.key === refusedKey && field === refusedField ? errorMessage(error) : undefined;
   };
 
-  const unitOptions = UNITS.map((unit) => ({ value: unit, label: t(`limits.unit.${unit}`) }));
-
   return (
     <form className={styles.editor} onSubmit={submit} noValidate>
       {rows.length === 0 && <p className={styles.dim}>{emptyLabel}</p>}
-      {rows.map((row, index) => (
-        <fieldset key={row.key} className={styles.row}>
-          <legend className={styles.visuallyHidden}>{fill(t("limits.row"), { n: index + 1 })}</legend>
-          <TextField
-            label={t("limits.windowCount")}
-            value={row.count}
-            inputMode="numeric"
-            autoComplete="off"
-            onChange={(event) => edit(row.key, { count: event.target.value })}
-            error={fieldError(row, "window")}
-          />
-          <Select
-            label={t("limits.windowUnit")}
-            options={unitOptions}
-            value={row.unit}
-            onChange={(event) => edit(row.key, { unit: event.target.value as WindowUnit })}
-          />
-          <TextField
-            label={t("limits.amount")}
-            value={row.amount}
-            inputMode="decimal"
-            autoComplete="off"
-            onChange={(event) => edit(row.key, { amount: event.target.value })}
-            error={fieldError(row, "amount")}
-          />
-          <Button className={styles.remove} onClick={() => remove(row.key)}>
-            {t("limits.remove")}
-          </Button>
-        </fieldset>
-      ))}
-      {error != null && refusedKey === undefined && <p role="alert">{errorMessage(error)}</p>}
+      {rows.map((row, index) => {
+        const count = row.count.trim();
+        // An unreadable count takes the form of 0: "minutes", "минут".
+        const unitCount = /^\d+$/.test(count) ? Number(count) : 0;
+        const unitOptions = UNITS.map((unit) => ({ value: unit, label: unitLabel(unit, unitCount, t, lang) }));
+        return (
+          <fieldset key={row.key} className={styles.row}>
+            <legend className={styles.visuallyHidden}>{fill(t("limits.row"), { n: index + 1 })}</legend>
+            <TextField
+              label={t("limits.windowCount")}
+              value={row.count}
+              inputMode="numeric"
+              autoComplete="off"
+              onChange={(event) => edit(row.key, { count: event.target.value })}
+              error={fieldError(row, "window")}
+            />
+            <Select
+              label={t("limits.windowUnit")}
+              options={unitOptions}
+              value={row.unit}
+              onChange={(event) => edit(row.key, { unit: event.target.value as WindowUnit })}
+            />
+            <TextField
+              label={t("limits.amount")}
+              value={row.amount}
+              inputMode="decimal"
+              autoComplete="off"
+              onChange={(event) => edit(row.key, { amount: event.target.value })}
+              error={fieldError(row, "amount")}
+            />
+            <Button className={styles.remove} onClick={() => remove(row.key)}>
+              {t("limits.remove")}
+            </Button>
+          </fieldset>
+        );
+      })}
+      {error != null && !refusalShown && <p role="alert">{errorMessage(error)}</p>}
       <div className={styles.actions}>
         <Button onClick={add} disabled={rows.length >= MAX_LIMITS}>
           {t("limits.add")}

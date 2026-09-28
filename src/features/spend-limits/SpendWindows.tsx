@@ -25,7 +25,7 @@ export function SpendWindows({
     <ul className={styles.list}>
       {windows.map((window) => {
         const amount = money(window.amountUsd, lang);
-        const per = fill(t("limits.per"), { amount, window: windowText(window.windowMinutes, t) });
+        const per = fill(t("limits.per"), { amount, window: windowText(window.windowMinutes, t, lang) });
         return (
           <li key={window.windowMinutes} className={styles.window}>
             <div className={styles.head}>
