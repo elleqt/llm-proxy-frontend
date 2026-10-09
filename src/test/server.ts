@@ -95,6 +95,7 @@ export const fixtures = {
     email: "ops@example.com",
     status: "active",
     disabled: false,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: "2026-09-23T07:00:00Z",
     quota: [{ window: "5h", usedRatio: 0.4, resetAt: "2026-09-23T12:00:00Z", observedAt: "2026-09-23T09:00:00Z" }],

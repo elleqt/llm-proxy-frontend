@@ -232,6 +232,24 @@ function preview(rules: string[]): Schemas["PolicyPreview"] {
   return { errors, covered };
 }
 
+/** What the backend shows of a proxy choice: never the URL's credentials, path or query. */
+function shownProxy(input: Schemas["AccountProxyInput"] | undefined): Schemas["AccountProxy"] {
+  if (input === undefined || input.mode !== "custom") return { mode: input?.mode ?? "inherit" };
+  const url = new URL(input.url ?? "");
+  return { mode: "custom", url: `${url.protocol}//${url.host}`, hasCredentials: url.username !== "" || url.password !== "" };
+}
+
+/** The backend's refusal of a proxy choice it cannot use, or null. */
+function proxyRefusal(input: Schemas["AccountProxyInput"] | undefined) {
+  if (input === undefined || input.mode !== "custom") return input?.url ? "proxy.url" : null;
+  try {
+    const url = new URL(input.url ?? "");
+    return ["http:", "https:", "socks5:", "socks5h:"].includes(url.protocol) && url.hostname !== "" ? null : "proxy.url";
+  } catch {
+    return "proxy.url";
+  }
+}
+
 let accounts: Schemas["ProviderAccount"][] = [
   {
     id: "claude-ops@example.com",
@@ -240,6 +258,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "ops@example.com",
     status: "active",
     disabled: false,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(40 * 60_000),
     quota: [
@@ -264,6 +283,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "team@example.com",
     status: "error",
     disabled: false,
+    proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true },
     lastError: "refresh token rejected (401)",
     lastRefreshedAt: ago(26 * HOUR),
     quota: [
@@ -281,6 +301,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "research-team-shared-account@subdivision.example.com",
     status: "active",
     disabled: false,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(3 * HOUR),
     quota: [
@@ -300,6 +321,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: null,
     status: "disabled",
     disabled: true,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: null,
     quota: [],
@@ -864,6 +886,7 @@ const handlers = [
       email: `new${n}@example.com`,
       status: "active",
       disabled: false,
+      proxy: { mode: "inherit" },
       lastError: null,
       lastRefreshedAt: new Date().toISOString(),
       quota: [],
@@ -872,10 +895,19 @@ const handlers = [
     return response(201).json(account);
   }),
   http.patch("/api/admin/providers/{accountId}", async ({ params, request, response }) => {
-    const { disabled } = await request.json();
+    const { disabled, proxy } = await request.json();
     const account = accounts.find((a) => a.id === params.accountId);
     if (account === undefined) return response.untyped(notFound());
-    const updated = { ...account, disabled, status: disabled ? "disabled" : "active" };
+    if (disabled === undefined && proxy === undefined) {
+      return response(422).json({ code: "invalid_input", message: "" });
+    }
+    const refused = proxyRefusal(proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const updated = {
+      ...account,
+      ...(disabled === undefined ? {} : { disabled, status: disabled ? "disabled" : "active" }),
+      ...(proxy === undefined ? {} : { proxy: shownProxy(proxy) }),
+    };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);
   }),
@@ -884,10 +916,12 @@ const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
   http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
-    const { baseURL, apiKey } = await request.json();
+    const { baseURL, apiKey, proxy } = await request.json();
     if (!/^https?:\/\/[^/]/.test(baseURL)) {
       return response(422).json({ code: "invalid_input", message: "", field: "baseURL" });
     }
+    const refused = proxyRefusal(proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
     if (apiKey === "bad") return response(422).json({ code: "provider_auth_failed", message: "", field: "apiKey" });
     const served = new Set(accounts.flatMap((a) => a.compat?.models.map((m) => m.alias ?? m.name) ?? []));
     const models = ["deepseek-chat", "deepseek-reasoner", "llama3.1:8b"];
@@ -902,6 +936,8 @@ const handlers = [
     if (accounts.some((a) => a.id === id)) {
       return response(409).json({ code: "conflict", message: "", field: "name" });
     }
+    const refused = proxyRefusal(body.proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
     const account: Schemas["ProviderAccount"] = {
       id,
       provider: body.name,
@@ -909,6 +945,7 @@ const handlers = [
       email: null,
       status: "active",
       disabled: false,
+      proxy: shownProxy(body.proxy),
       lastError: null,
       lastRefreshedAt: null,
       quota: [],
@@ -927,9 +964,12 @@ const handlers = [
     const body = await request.json();
     const account = accounts.find((a) => a.id === params.accountId);
     if (account?.compat === undefined) return response.untyped(notFound());
+    const refused = proxyRefusal(body.proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
     const hasApiKey = body.apiKey !== undefined ? body.apiKey !== "" : body.clearApiKey ? false : account.compat.hasApiKey;
     const updated: Schemas["ProviderAccount"] = {
       ...account,
+      proxy: body.proxy === undefined ? account.proxy : shownProxy(body.proxy),
       compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models: body.models },
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));

@@ -230,7 +230,7 @@ describe("account table", () => {
     server.use(
       http.get("/api/admin/providers", ({ response }) => response(200).json([account])),
       http.patch("/api/admin/providers/{accountId}", async ({ request, response }) => {
-        const { disabled } = await request.json();
+        const { disabled = false } = await request.json();
         sent.push(disabled);
         account = { ...account, disabled };
         return response(200).json(account);
