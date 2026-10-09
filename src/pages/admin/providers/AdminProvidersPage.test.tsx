@@ -553,6 +553,41 @@ describe("OpenAI-compatible providers", () => {
     expect(updates[1]?.proxy).toEqual({ mode: "custom", url: "http://new.example.com:8080" });
   });
 
+  it("asks for the key again before discovering at another base URL behind a stored own proxy", async () => {
+    const stored = { mode: "custom" as const, url: "http://proxy.example.com:3128", hasCredentials: true };
+    providers([{ ...compatAccount({ hasApiKey: true }), proxy: stored }]);
+    const discovers: Schemas["CompatDiscoverRequest"][] = [];
+    server.use(
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovers.push(await request.json());
+        return response(200).json({ models: ["model-a"], conflicts: {} });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    const baseURL = within(dialog).getByLabelText(en["compat.baseURL"]);
+    await user.clear(baseURL);
+    await user.type(baseURL, "https://other.example.com/v1");
+
+    // The stored proxy would be used through the account, but the stored key does not follow the URL.
+    const discover = within(dialog).getByRole("button", { name: en["compat.discover"] });
+    expect(discover).toBeDisabled();
+    expect(within(dialog).getByLabelText(en["compat.apiKey"])).toHaveAccessibleDescription(en["compat.apiKeyMovedHint"]);
+
+    await user.type(within(dialog).getByLabelText(en["compat.apiKey"]), COMPAT_KEY);
+    expect(discover).toBeEnabled();
+    await user.click(discover);
+    await waitFor(() => expect(discovers).toHaveLength(1));
+    expect(discovers[0]).toEqual({
+      baseURL: "https://other.example.com/v1",
+      apiKey: COMPAT_KEY,
+      accountId: "openai-compatible-acme",
+    });
+  });
+
   it("shows the vendor's refusal of the key as its code's text", async () => {
     providers([]);
     server.use(

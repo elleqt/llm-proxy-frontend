@@ -66,6 +66,9 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const storedKeyApplies =
     existing?.hasApiKey === true && !clearKey && baseURL.trim().replace(/\/+$/, "") === existing.baseURL.replace(/\/+$/, "");
   const keyNeeded = existing?.hasApiKey === true && !clearKey && !storedKeyApplies && apiKey.trim() === "";
+  // Discovery through a stored own proxy names the account, and the server then refuses to
+  // go without the key the URL move dropped: the key must be typed first.
+  const discoverBlocked = account?.proxy.mode === "custom" && !proxyEdited && keyNeeded;
 
   // gcTime 0: the typed key is a mutation variable, dropped once the form closes.
   const discover = useMutation({
@@ -220,7 +223,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
         <fieldset className={styles.models}>
           <legend>{t("compat.models")}</legend>
           <div className={styles.row}>
-            <Button onClick={runDiscover} busy={discover.isPending} disabled={baseURL.trim() === ""}>
+            <Button onClick={runDiscover} busy={discover.isPending} disabled={baseURL.trim() === "" || discoverBlocked}>
               {t("compat.discover")}
             </Button>
             <span role="status" className={styles.dim}>
