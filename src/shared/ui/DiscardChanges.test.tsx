@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -39,8 +39,12 @@ describe("useDiscardGuard", () => {
     await user.type(screen.getByLabelText("Value"), "x");
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Keep editing" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Keep editing" }));
     expect(onClose).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Edit provider" })).toContainElement(document.activeElement as HTMLElement),
+    );
     expect(screen.getByLabelText("Value")).toHaveValue("x");
 
     await user.keyboard("{Escape}");

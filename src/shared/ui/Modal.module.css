@@ -86,6 +86,7 @@
   width: min(32.5rem, 100vw);
   max-height: none;
   height: 100vh;
+  height: 100dvh;
   border-radius: 0;
   border-width: 0 0 0 1px;
   display: flex;

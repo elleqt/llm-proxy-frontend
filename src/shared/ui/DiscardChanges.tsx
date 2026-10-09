@@ -25,7 +25,13 @@ export function useDiscardGuard(dirty: boolean, close: () => void): { requestClo
           <Button ref={keepRef} onClick={() => setAsking(false)}>
             {t("ui.keepEditing")}
           </Button>
-          <Button variant="danger" onClick={close}>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setAsking(false);
+              close();
+            }}
+          >
             {t("ui.discard")}
           </Button>
         </>
