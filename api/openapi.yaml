@@ -1389,7 +1389,9 @@ components:
       properties:
         baseURL: { type: string }
         apiKey: { type: string }
-        accountId: { type: string, description: An existing provider whose stored key is used when `apiKey` is absent, and whose proxy is used when `proxy` is absent. }
+        accountId:
+          type: string
+          description: An existing provider whose stored key is used when `apiKey` is absent, and whose proxy is used when `proxy` is absent.
         proxy:
           $ref: "#/components/schemas/AccountProxyInput"
           description: The proxy to ask through. Absent, the proxy of `accountId`, else the global one.

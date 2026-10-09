@@ -971,7 +971,7 @@ export interface components {
         CompatDiscoverRequest: {
             baseURL: string;
             apiKey?: string;
-            /** @description An existing provider whose stored key is used when `apiKey` is absent */
+            /** @description An existing provider whose stored key is used when `apiKey` is absent, and whose proxy is used when `proxy` is absent. */
             accountId?: string;
             /** @description The proxy to ask through. Absent, the proxy of `accountId`, else the global one. */
             proxy?: components["schemas"]["AccountProxyInput"];
