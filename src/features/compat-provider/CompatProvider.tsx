@@ -6,6 +6,8 @@ import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Button, Checkbox, Modal, TextField } from "../../shared/ui";
+import { ProxyFields } from "../account-proxy/ProxyFields";
+import { proxyChanged, proxyDraft, proxyInput } from "../account-proxy/proxy";
 import styles from "./CompatProvider.module.css";
 
 type CompatModel = components["schemas"]["CompatModel"];
@@ -56,6 +58,9 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const [conflicts, setConflicts] = useState<Record<string, string[]>>({});
   const [typed, setTyped] = useState("");
   const [pickError, setPickError] = useState(false);
+  const [proxy, setProxy] = useState(() => proxyDraft(account?.proxy));
+  // A new provider always states its proxy; an edit sends one only when it asks for something else.
+  const proxyEdited = account === undefined || proxyChanged(proxy, account.proxy);
   // A stored key is bound to its base URL (the server refuses otherwise): at
   // another URL it is neither offered to discovery nor kept.
   const storedKeyApplies =
@@ -71,7 +76,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
     mutationFn: async (models: CompatModel[]) => {
       const key = apiKey.trim();
       if (account === undefined) {
-        const body: CreateRequest = { name: name.trim(), baseURL: baseURL.trim(), models };
+        const body: CreateRequest = { name: name.trim(), baseURL: baseURL.trim(), models, proxy: proxyInput(proxy) };
         if (key !== "") body.apiKey = key;
         if (prefix.trim() !== "") body.prefix = prefix.trim();
         return unwrap(client.POST("/api/admin/providers/compat", { body }));
@@ -83,6 +88,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
         clearApiKey: key === "" && clearKey,
       };
       if (key !== "") body.apiKey = key;
+      if (proxyEdited) body.proxy = proxyInput(proxy);
       return unwrap(
         client.PUT("/api/admin/providers/compat/{accountId}", { params: { path: { accountId: account.id } }, body }),
       );
@@ -94,7 +100,12 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const runDiscover = () => {
     const body: DiscoverRequest = { baseURL: baseURL.trim() };
     if (apiKey.trim() !== "") body.apiKey = apiKey.trim();
-    else if (account !== undefined && storedKeyApplies) body.accountId = account.id;
+    // Discovery goes through the proxy the provider will use. A stored own proxy's URL never
+    // reaches the browser, so the server is pointed at the account to use it.
+    if (proxyEdited) body.proxy = proxyInput(proxy);
+    else if (account?.proxy.mode === "custom") body.accountId = account.id;
+    else body.proxy = { mode: account?.proxy.mode ?? "inherit" };
+    if (account !== undefined && apiKey.trim() === "" && storedKeyApplies) body.accountId = account.id;
     discover.mutate(body, {
       onSuccess: (found) => {
         // Rows already there keep their choice and alias; new ones wait to be picked.
@@ -134,7 +145,8 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const saveError = save.error instanceof ApiError ? save.error : null;
   const onField = (field: string) => (saveError?.field === field ? errorMessage(saveError) : undefined);
   const discoverError = discover.error instanceof ApiError ? discover.error : null;
-  const fieldShown = saveError?.field !== undefined && ["name", "baseURL", "apiKey", "prefix"].includes(saveError.field);
+  const fieldShown =
+    saveError?.field !== undefined && ["name", "baseURL", "apiKey", "prefix", "proxy.url"].includes(saveError.field);
 
   return (
     <Modal
@@ -198,6 +210,12 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
           onChange={(event) => setPrefix(event.target.value)}
           error={onField("prefix")}
         />
+        <ProxyFields
+          value={proxy}
+          onChange={setProxy}
+          stored={account?.proxy}
+          error={onField("proxy.url") ?? (discoverError?.field === "proxy.url" ? errorMessage(discoverError) : undefined)}
+        />
 
         <fieldset className={styles.models}>
           <legend>{t("compat.models")}</legend>
@@ -209,7 +227,9 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
               {discover.isSuccess ? fill(t("compat.discovered"), { n: discover.data.models.length }) : ""}
             </span>
           </div>
-          {discover.isError && discoverError?.field !== "baseURL" && <p role="alert">{errorMessage(discover.error)}</p>}
+          {discover.isError && discoverError?.field !== "baseURL" && discoverError?.field !== "proxy.url" && (
+            <p role="alert">{errorMessage(discover.error)}</p>
+          )}
           {rows.length === 0 ? (
             <p className={styles.dim}>{t("compat.noModels")}</p>
           ) : (

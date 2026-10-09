@@ -391,7 +391,7 @@ describe("OpenAI-compatible providers", () => {
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
 
     const pickB = await within(dialog).findByRole("checkbox", { name: fill(en["compat.serve"], { model: "model-b" }) });
-    expect(discovered).toEqual({ baseURL: "https://api.example.com/v1", apiKey: COMPAT_KEY });
+    expect(discovered).toEqual({ baseURL: "https://api.example.com/v1", apiKey: COMPAT_KEY, proxy: { mode: "inherit" } });
     // Discovered models wait to be picked.
     expect(pickB).not.toBeChecked();
     await user.click(pickB);
@@ -406,6 +406,7 @@ describe("OpenAI-compatible providers", () => {
       baseURL: "https://api.example.com/v1",
       apiKey: COMPAT_KEY,
       models: [{ name: "model-b", alias: "b-fast" }],
+      proxy: { mode: "inherit" },
     });
     expect(await screen.findByRole("cell", { name: "https://api.example.com/v1" })).toBeInTheDocument();
     expect(cached(queryClient)).not.toContain(COMPAT_KEY);
@@ -450,7 +451,11 @@ describe("OpenAI-compatible providers", () => {
     // At the stored base URL, discovery may use the stored key.
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
     await waitFor(() => expect(discovers).toHaveLength(1));
-    expect(discovers[0]).toEqual({ baseURL: "https://api.example.com/v1", accountId: "openai-compatible-acme" });
+    expect(discovers[0]).toEqual({
+      baseURL: "https://api.example.com/v1",
+      accountId: "openai-compatible-acme",
+      proxy: { mode: "inherit" },
+    });
 
     // At another one it may not, and the key field says so.
     const baseURL = within(dialog).getByLabelText(en["compat.baseURL"]);
@@ -459,7 +464,7 @@ describe("OpenAI-compatible providers", () => {
     expect(within(dialog).getByLabelText(en["compat.apiKey"])).toHaveAccessibleDescription(en["compat.apiKeyMovedHint"]);
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
     await waitFor(() => expect(discovers).toHaveLength(2));
-    expect(discovers[1]).toEqual({ baseURL: "https://other.example.com/v1" });
+    expect(discovers[1]).toEqual({ baseURL: "https://other.example.com/v1", proxy: { mode: "inherit" } });
 
     await user.clear(baseURL);
     await user.type(baseURL, "https://api.example.com/v1");
@@ -472,6 +477,80 @@ describe("OpenAI-compatible providers", () => {
       prefix: "",
       clearApiKey: false,
     });
+  });
+
+  it("adds a provider behind its own proxy, and discovers through it", async () => {
+    const accounts: Schemas["ProviderAccount"][] = [];
+    providers(accounts);
+    let discovered: Schemas["CompatDiscoverRequest"] | undefined;
+    let created: Schemas["CompatProviderRequest"] | undefined;
+    server.use(
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovered = await request.json();
+        return response(200).json({ models: ["model-a"], conflicts: {} });
+      }),
+      http.post("/api/admin/providers/compat", async ({ request, response }) => {
+        created = await request.json();
+        const account = compatAccount({ models: created.models });
+        accounts.push(account);
+        return response(201).json(account);
+      }),
+    );
+    const user = userEvent.setup();
+    const { queryClient } = renderApp("/admin/providers");
+
+    await openCompatForm(user);
+    const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
+    await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
+    await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
+    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "custom");
+    await user.type(within(dialog).getByLabelText(en["proxy.url"]), "socks5://ops:proxy-pass@proxy.example.com:1080");
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(await within(dialog).findByRole("checkbox", { name: fill(en["compat.serve"], { model: "model-a" }) }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.save"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const proxy = { mode: "custom", url: "socks5://ops:proxy-pass@proxy.example.com:1080" };
+    expect(discovered).toEqual({ baseURL: "https://api.example.com/v1", proxy });
+    expect(created).toEqual({ name: "acme", baseURL: "https://api.example.com/v1", models: [{ name: "model-a" }], proxy });
+    expect(cached(queryClient)).not.toContain("proxy-pass");
+  });
+
+  it("edits a provider behind a stored own proxy: discovery uses it, a save keeps it, a new URL replaces it", async () => {
+    const stored = { mode: "custom" as const, url: "http://proxy.example.com:3128", hasCredentials: true };
+    providers([{ ...compatAccount({ hasApiKey: false }), proxy: stored }]);
+    const updates: Schemas["CompatProviderUpdate"][] = [];
+    const discovers: Schemas["CompatDiscoverRequest"][] = [];
+    server.use(
+      http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+        const body = await request.json();
+        updates.push(body);
+        return response(200).json({ ...compatAccount({ hasApiKey: false }), proxy: stored });
+      }),
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovers.push(await request.json());
+        return response(200).json({ models: ["model-a"], conflicts: {} });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await waitFor(() => expect(discovers).toHaveLength(1));
+    expect(discovers[0]).toEqual({ baseURL: "https://api.example.com/v1", accountId: "openai-compatible-acme" });
+
+    await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]).not.toHaveProperty("proxy");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+    const again = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    await user.type(within(again).getByLabelText(en["proxy.url"]), "http://new.example.com:8080");
+    await user.click(within(again).getByRole("button", { name: en["compat.saveEdit"] }));
+    await waitFor(() => expect(updates).toHaveLength(2));
+    expect(updates[1]?.proxy).toEqual({ mode: "custom", url: "http://new.example.com:8080" });
   });
 
   it("shows the vendor's refusal of the key as its code's text", async () => {
