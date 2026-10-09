@@ -9,7 +9,7 @@ export { CopyField, type CopyFieldProps } from "./CopyField";
 export { useDiscardGuard } from "./DiscardChanges";
 export { DiffView, type DiffViewProps } from "./DiffView";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
-export { IconButton, LockIcon, PencilIcon, RefreshIcon, TrashIcon, type IconButtonProps } from "./Icon";
+export { ChevronIcon, IconButton, LockIcon, PencilIcon, RefreshIcon, TrashIcon, type IconButtonProps } from "./Icon";
 export { Meter, type MeterProps } from "./Meter";
 export { Modal, type ModalProps } from "./Modal";
 export { Select, type SelectOption, type SelectProps } from "./Select";

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useT, type MessageKey } from "../../shared/i18n";
 import { Badge, Button, TextField } from "../../shared/ui";
 import { KNOWN_LEVELS, LEVEL_PATTERN, levelsKind, type LevelsKind } from "./levels";
@@ -9,6 +9,8 @@ export interface ReasoningLevelsProps {
   value: string[] | null;
   /** The server's default set. */
   defaults: readonly string[];
+  /** More levels to offer as chips, e.g. the stored models' own values while their lists differ. */
+  offered?: readonly string[];
   onChange: (list: string[]) => void;
   /** Already-translated error, e.g. an empty list refused on save. */
   error?: string | undefined;
@@ -18,7 +20,7 @@ export interface ReasoningLevelsProps {
  * The `reasoning_effort` values an OpenAI-compatible provider's models pass to the vendor
  * unchanged: one list for the provider, as toggle chips. Reset returns to the default set.
  */
-export function ReasoningLevels({ value, defaults, onChange, error }: ReasoningLevelsProps) {
+export function ReasoningLevels({ value, defaults, offered = [], onChange, error }: ReasoningLevelsProps) {
   const t = useT();
   const headingId = useId();
   const tipId = useId();
@@ -28,7 +30,7 @@ export function ReasoningLevels({ value, defaults, onChange, error }: ReasoningL
   const [typed, setTyped] = useState("");
   const [invalid, setInvalid] = useState(false);
   const checked = value ?? [];
-  const options = [...new Set([...KNOWN_LEVELS, ...defaults, ...checked, ...added])];
+  const options = [...new Set([...KNOWN_LEVELS, ...defaults, ...offered, ...checked, ...added])];
   const kind = levelsKind(value, defaults);
 
   const add = () => {
@@ -135,7 +137,8 @@ export const LEVELS_MARK = {
 
 /**
  * The "?" beside the heading: the long explanation as a tooltip that opens on hover, on
- * focus and on click (which pins it); Escape closes it without closing the drawer.
+ * focus and on click (which pins it). Escape closes an open tip, wherever focus is, and
+ * only the tip: the drawer stays.
  */
 function HelpTip({ id }: { id: string }) {
   const t = useT();
@@ -144,6 +147,19 @@ function HelpTip({ id }: { id: string }) {
   const [pinned, setPinned] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const open = !dismissed && (hovered || focused || pinned);
+  useEffect(() => {
+    if (!open) return;
+    // Capture on the document runs before the drawer's own Escape handler.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPinned(false);
+      setDismissed(true);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open]);
   return (
     <span
       className={styles.tip}
@@ -169,13 +185,6 @@ function HelpTip({ id }: { id: string }) {
           // A click pins an open tip, or closes a pinned one.
           setPinned(!(open && pinned));
           setDismissed(open && pinned);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && open) {
-            event.preventDefault();
-            setPinned(false);
-            setDismissed(true);
-          }
         }}
       >
         ?

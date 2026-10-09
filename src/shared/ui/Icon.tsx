@@ -64,6 +64,15 @@ export function RefreshIcon({ label }: IconProps) {
   );
 }
 
+/** Points right; a disclosure turns it down while open. */
+export function ChevronIcon({ label }: IconProps) {
+  return (
+    <Svg label={label}>
+      <path d="m9 6 6 6-6 6" />
+    </Svg>
+  );
+}
+
 export interface IconButtonProps extends ComponentProps<"button"> {
   /** Accessible name and tooltip; the icon itself stays decorative. */
   label: string;

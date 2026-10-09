@@ -40,24 +40,6 @@
   gap: 0.5rem;
 }
 
-/* Active in the accent colour; an error, a vendor's own word or a disabled account dimmed. */
-.dot {
-  flex: none;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--dim);
-}
-
-.dot[data-status="active"] {
-  background: var(--accent);
-}
-
-.dot[data-status="disabled"] {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--dim);
-}
-
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -189,7 +171,8 @@
 }
 
 .arrow {
-  display: inline-block;
+  display: inline-flex;
+  vertical-align: middle;
   margin-right: 0.35rem;
   transition: transform 0.15s;
 }

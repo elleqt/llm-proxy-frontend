@@ -2,9 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { QuotaMeters } from "../../entities/provider/QuotaMeters";
+import { accountStatus, refreshedAt, StatusDot } from "../../entities/provider/StatusDot";
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
-import { shortDateTime } from "../../shared/lib/dates";
 import { Button, Modal, useDiscardGuard } from "../../shared/ui";
 import { proxyChanged, proxyInput } from "./proxy";
 import { ProxySection, sectionDraft } from "./ProxySection";
@@ -54,17 +54,8 @@ export function AccountDrawer({
     event.preventDefault();
     save.mutate();
   };
-  const status = account.disabled
-    ? t("providers.disabled")
-    : account.status === "active"
-      ? t("providers.status.active")
-      : account.status === "error"
-        ? t("providers.status.error")
-        : account.status;
-  const refreshed =
-    account.lastRefreshedAt == null
-      ? t("providers.never")
-      : shortDateTime(Date.parse(account.lastRefreshedAt), now, lang);
+  const status = accountStatus(account, t);
+  const refreshed = refreshedAt(account, now, lang, t);
   return (
     <>
       <Modal
@@ -74,12 +65,7 @@ export function AccountDrawer({
         title={
           <span className={styles.title}>
             {/* Decorative: the State section says the same in words. */}
-            <span
-              aria-hidden
-              className={styles.dot}
-              data-status={account.disabled ? "disabled" : account.status}
-              title={`${status} · ${t("providers.refreshed")}: ${refreshed}`}
-            />
+            <StatusDot account={account} now={now} />
             {`${account.provider} · ${accountName(account)}`}
           </span>
         }

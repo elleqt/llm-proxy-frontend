@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { compatDefaultsQuery, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
+import { StatusDot } from "../../entities/provider/StatusDot";
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
-import { Badge, Button, Checkbox, Modal, RefreshIcon, Spinner, TextField, useDiscardGuard } from "../../shared/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  ChevronIcon,
+  Modal,
+  RefreshIcon,
+  Spinner,
+  TextField,
+  useDiscardGuard,
+} from "../../shared/ui";
 import { ProxySection, sectionDraft } from "../account-proxy/ProxySection";
 import { proxyChanged, proxyInput } from "../account-proxy/proxy";
 import styles from "./CompatProvider.module.css";
@@ -243,7 +254,7 @@ export function CompatDrawer({
           ) : (
             <span className={styles.title}>
               {/* Decorative: the page's row says the same in words. */}
-              <span aria-hidden className={styles.dot} data-status={account.disabled ? "disabled" : account.status} />
+              <StatusDot account={account} />
               {existing.name}
             </span>
           )
@@ -308,15 +319,26 @@ export function CompatDrawer({
                   {keyMode === "remove" ? (
                     <>
                       <span className={styles.dim}>{t("compat.keyRemoved")}</span>
-                      <Button
-                        ref={focusWhen("undo")}
-                        onClick={() => {
-                          keyFocus.current = "remove";
-                          setClearKey(false);
-                        }}
-                      >
-                        {t("compat.keyUndo")}
-                      </Button>
+                      <span className={styles.lineActions}>
+                        {/* Typing a key instead of removing the stored one: the old key goes, the new one is kept. */}
+                        <Button
+                          onClick={() => {
+                            setClearKey(false);
+                            setKeyReplacing(true);
+                          }}
+                        >
+                          {t("compat.keyReplace")}
+                        </Button>
+                        <Button
+                          ref={focusWhen("undo")}
+                          onClick={() => {
+                            keyFocus.current = "remove";
+                            setClearKey(false);
+                          }}
+                        >
+                          {t("compat.keyUndo")}
+                        </Button>
+                      </span>
                     </>
                   ) : (
                     <>
@@ -525,7 +547,7 @@ export function CompatDrawer({
               >
                 <span>
                   <span aria-hidden className={styles.arrow}>
-                    ▸
+                    <ChevronIcon />
                   </span>
                   {t("compat.advanced")}
                 </span>
@@ -541,6 +563,8 @@ export function CompatDrawer({
                 <ReasoningLevels
                   value={shownList}
                   defaults={defaultLevels}
+                  // While the models differ nothing is checked: their own values are still on offer.
+                  offered={storedModels?.flatMap((m) => m.reasoningLevels ?? []) ?? []}
                   onChange={(list) => {
                     setLevelsError(false);
                     setLevels({ touched: true, list });
