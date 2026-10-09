@@ -35,3 +35,9 @@ export function proxyLabel(proxy: AccountProxy, t: (key: MessageKey) => string):
   if (proxy.url === undefined) return t("proxy.unreadable");
   return proxy.hasCredentials ? `${proxy.url} · ${t("proxy.withCredentials")}` : proxy.url;
 }
+
+/** A stored proxy address (`scheme://host:port`, never credentials) as its scheme tag and its host; null when it is not one. */
+export function proxyParts(url: string): { scheme: string; host: string } | null {
+  const match = /^([a-z][a-z0-9+.-]*):\/\/(.+)$/i.exec(url);
+  return match === null ? null : { scheme: match[1]!.toUpperCase(), host: match[2]! };
+}

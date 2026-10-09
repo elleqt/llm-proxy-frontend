@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
-import { AccountProxyAction } from "../../../features/account-proxy/AccountProxy";
+import { QuotaMeters } from "../../../entities/provider/QuotaMeters";
 import { proxyLabel } from "../../../features/account-proxy/proxy";
 import { EditCompatProvider, NewCompatProvider } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
@@ -12,7 +12,6 @@ import { Badge, Button, EmptyState, Spinner, Table, type Column } from "../../..
 import { ConfirmDialog } from "../ConfirmDialog";
 import styles from "../admin.module.css";
 import { shortDateTime } from "../../../shared/lib/dates";
-import { quotaReset } from "./quotaReset";
 
 export function AdminProvidersPage() {
   const t = useT();
@@ -21,7 +20,6 @@ export function AdminProvidersPage() {
   const accounts = useQuery(providerAccountsQuery);
   const listRef = useRef<HTMLDivElement>(null);
   const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
-  const percent = new Intl.NumberFormat(lang, { style: "percent" });
   // "resets in 4 h 12 min" counts down while the page is open.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -111,42 +109,7 @@ export function AdminProvidersPage() {
     {
       id: "quota",
       header: t("providers.quota"),
-      cell: (a) =>
-        a.quota.length === 0 ? (
-          <span className={styles.dim}>{t("providers.noQuota")}</span>
-        ) : (
-          <ul className={styles.quotas}>
-            {a.quota.map((window) => {
-              const used = percent.format(window.usedRatio);
-              return (
-                <li key={window.window} className={styles.quota}>
-                  <span className={styles.quotaWindow}>{window.window}</span>
-                  <span
-                    role="meter"
-                    aria-label={fill(t("providers.quotaLabel"), { window: window.window })}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(window.usedRatio * 100)}
-                    aria-valuetext={used}
-                    className={styles.bar}
-                  >
-                    <span
-                      className={styles.barFill}
-                      style={{ width: `${Math.min(1, Math.max(0, window.usedRatio)) * 100}%` }}
-                    />
-                  </span>
-                  <span
-                    className={styles.quotaText}
-                    title={window.resetAt == null ? undefined : dateTime.format(new Date(window.resetAt))}
-                  >
-                    {used}
-                    {window.resetAt != null && ` · ${quotaReset(window.resetAt, now, lang, t)}`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ),
+      cell: (a) => <QuotaMeters quota={a.quota} now={now} />,
     },
     {
       id: "actions",
@@ -155,7 +118,6 @@ export function AdminProvidersPage() {
       cell: (a) => (
         <div className={styles.stackedActions}>
           <EditCompatProvider account={a} />
-          <AccountProxyAction account={a} />
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>

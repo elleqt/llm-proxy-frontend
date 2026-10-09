@@ -1,0 +1,96 @@
+import { useId } from "react";
+import { useT } from "../../shared/i18n";
+import { Button, LockIcon, TextField } from "../../shared/ui";
+import { PROXY_MODES, proxyDraft, proxyParts, type AccountProxy, type ProxyDraft } from "./proxy";
+import styles from "./ProxySection.module.css";
+
+/** The proxy part of a drawer. `replacing`: the URL field stands in for a stored own proxy's line. */
+export interface ProxySectionDraft extends ProxyDraft {
+  replacing: boolean;
+}
+
+/** A section's starting point: the stored mode, a stored own proxy shown as its line. */
+export function sectionDraft(stored: AccountProxy | undefined): ProxySectionDraft {
+  return { ...proxyDraft(stored), replacing: false };
+}
+
+/**
+ * How an account's traffic leaves the gateway: three segments, and for an own
+ * proxy either the stored one's line (kept while it shows) or the URL field.
+ */
+export function ProxySection({
+  value,
+  onChange,
+  stored,
+  error,
+}: {
+  value: ProxySectionDraft;
+  onChange: (next: ProxySectionDraft) => void;
+  stored?: AccountProxy | undefined;
+  error?: string | undefined;
+}) {
+  const t = useT();
+  const headingId = useId();
+  const name = useId();
+  const storedOwn = stored?.mode === "custom";
+  const parts = stored?.url === undefined ? null : proxyParts(stored.url);
+  return (
+    <section className={styles.section} aria-labelledby={headingId}>
+      <h3 id={headingId} className={styles.heading}>
+        {t("proxy.column")}
+      </h3>
+      <div role="radiogroup" aria-label={t("proxy.mode")} className={styles.segments}>
+        {PROXY_MODES.map((mode) => (
+          <label key={mode} className={styles.segment}>
+            <input
+              type="radio"
+              className={styles.visuallyHidden}
+              name={name}
+              value={mode}
+              checked={value.mode === mode}
+              onChange={() => onChange({ ...value, mode })}
+            />
+            <span>{t(`proxy.${mode}`)}</span>
+          </label>
+        ))}
+      </div>
+      {value.mode === "inherit" && <p className={styles.hint}>{t("proxy.inheritHint")}</p>}
+      {value.mode === "direct" && <p className={styles.hint}>{t("proxy.directHint")}</p>}
+      {value.mode === "custom" &&
+        (storedOwn && !value.replacing ? (
+          <div className={styles.stored}>
+            {parts === null ? (
+              <span>{stored.url ?? t("proxy.unreadable")}</span>
+            ) : (
+              <>
+                <span className={styles.tag}>{parts.scheme}</span>
+                <span className={styles.host}>{parts.host}</span>
+              </>
+            )}
+            {stored.hasCredentials === true && <LockIcon label={t("proxy.withCredentials")} />}
+            <Button onClick={() => onChange({ ...value, replacing: true })}>{t("proxy.replace")}</Button>
+          </div>
+        ) : (
+          <div className={styles.replace}>
+            <TextField
+              label={t("proxy.url")}
+              hint={t("proxy.urlHint")}
+              placeholder="http://user:password@proxy.example.com:3128"
+              // The URL may carry the proxy's password, as the API key field does.
+              type="password"
+              value={value.url}
+              mono
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus={value.replacing}
+              onChange={(event) => onChange({ ...value, url: event.target.value })}
+              error={error}
+            />
+            {storedOwn && (
+              <Button onClick={() => onChange({ ...value, replacing: false, url: "" })}>{t("proxy.cancelReplace")}</Button>
+            )}
+          </div>
+        ))}
+    </section>
+  );
+}

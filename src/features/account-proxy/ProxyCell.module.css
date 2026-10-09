@@ -1,0 +1,74 @@
+.dim {
+  color: var(--dim);
+}
+
+/* Holds the line's place, so a line raised over its neighbours moves nothing. */
+.cell {
+  position: relative;
+  display: block;
+  height: 1.4em;
+  min-width: 8rem;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+
+.tag {
+  flex: none;
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.host {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+/* The tag already names the scheme; the full address shows it only when raised. */
+.scheme {
+  display: none;
+}
+
+/* Only a host that really overflows fades out, on the text itself: it fits any row background. */
+.line[data-overflow] .host {
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+.line[data-overflow]:hover,
+.line[data-overflow]:focus-visible {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 32rem;
+  padding: 0 0.35rem;
+  margin-left: -0.35rem;
+  background: var(--panel);
+  box-shadow:
+    0 4px 14px rgb(0 0 0 / 0.18),
+    0 0 0 1px var(--line);
+}
+
+.line[data-overflow]:hover .host,
+.line[data-overflow]:focus-visible .host {
+  mask-image: none;
+}
+
+.line[data-overflow]:hover .scheme,
+.line[data-overflow]:focus-visible .scheme {
+  display: inline;
+}

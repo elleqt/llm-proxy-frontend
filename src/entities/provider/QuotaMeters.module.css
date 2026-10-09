@@ -1,0 +1,58 @@
+.dim {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--dim);
+}
+
+.quotas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 16rem;
+}
+
+.quota {
+  display: grid;
+  grid-template-columns: 2.5rem 6rem auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.quotaWindow {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--dim);
+}
+
+.bar {
+  display: block;
+  height: 0.5rem;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.quotaText {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 40rem) {
+  .quotas {
+    min-width: 0;
+  }
+
+  .quotaText {
+    white-space: normal;
+  }
+}

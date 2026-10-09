@@ -6,8 +6,8 @@ import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
 import { Button, Checkbox, Modal, Spinner, TextField } from "../../shared/ui";
-import { ProxyFields } from "../account-proxy/ProxyFields";
-import { proxyChanged, proxyDraft, proxyInput } from "../account-proxy/proxy";
+import { ProxySection, sectionDraft } from "../account-proxy/ProxySection";
+import { proxyChanged, proxyInput } from "../account-proxy/proxy";
 import styles from "./CompatProvider.module.css";
 import { levelsInput } from "./levels";
 import { ReasoningLevels } from "./ReasoningLevels";
@@ -65,7 +65,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const [levelsError, setLevelsError] = useState(false);
   // Whether a model's list is its own is judged against the default set, so Save waits for it.
   const defaults = useQuery(compatDefaultsQuery);
-  const [proxy, setProxy] = useState(() => proxyDraft(account?.proxy));
+  const [proxy, setProxy] = useState(() => sectionDraft(account?.proxy));
   // A new provider always states its proxy; an edit sends one only when it asks for something else.
   const proxyEdited = account === undefined || proxyChanged(proxy, account.proxy);
   // A stored key is bound to its base URL (the server refuses otherwise): at
@@ -235,7 +235,7 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
           onChange={(event) => setPrefix(event.target.value)}
           error={onField("prefix")}
         />
-        <ProxyFields
+        <ProxySection
           value={proxy}
           onChange={setProxy}
           stored={account?.proxy}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { en } from "../../shared/i18n/en";
-import { proxyChanged, proxyDraft, proxyInput, proxyLabel } from "./proxy";
+import { proxyChanged, proxyDraft, proxyInput, proxyLabel, proxyParts } from "./proxy";
 
 const t = (key: keyof typeof en) => en[key];
 
@@ -27,5 +27,12 @@ describe("proxy drafts", () => {
       `http://p.example.com:3128 · ${en["proxy.withCredentials"]}`,
     );
     expect(proxyLabel({ mode: "custom" }, t)).toBe(en["proxy.unreadable"]);
+  });
+});
+
+describe("proxyParts", () => {
+  it("split an address into its upper-cased scheme and host:port", () => {
+    expect(proxyParts("socks5h://proxy.example.com:1080")).toEqual({ scheme: "SOCKS5H", host: "proxy.example.com:1080" });
+    expect(proxyParts("nonsense")).toBeNull();
   });
 });
