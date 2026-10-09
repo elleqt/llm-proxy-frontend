@@ -28,6 +28,11 @@ export interface ModalProps {
    * once. Escape and the close button still close.
    */
   closeOnBackdrop?: boolean;
+  /**
+   * `dialog` (default): centred. `drawer`: a full-height panel at the right
+   * edge for editing a record; its footer stretches across the panel.
+   */
+  variant?: "dialog" | "drawer";
 }
 
 /** Body children with this attribute stay live while a modal is open (the toast region). */
@@ -88,6 +93,7 @@ function ModalDialog({
   initialFocus,
   returnFocus,
   closeOnBackdrop = true,
+  variant = "dialog",
 }: Omit<ModalProps, "open">) {
   const t = useT();
   const titleId = useId();
@@ -237,7 +243,7 @@ function ModalDialog({
     <div
       ref={backdropRef}
       data-modal-backdrop=""
-      className={styles.backdrop}
+      className={[styles.backdrop, variant === "drawer" && styles.drawerBackdrop].filter(Boolean).join(" ")}
       onMouseDown={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose();
       }}
@@ -248,7 +254,7 @@ function ModalDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={styles.dialog}
+        className={[styles.dialog, variant === "drawer" && styles.drawer].filter(Boolean).join(" ")}
       >
         <header className={styles.header}>
           <h2 id={titleId} className={styles.title}>

@@ -76,6 +76,40 @@
   border-top: 1px solid var(--line);
 }
 
+.drawerBackdrop {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.drawer {
+  width: min(32.5rem, 100vw);
+  max-height: none;
+  height: 100vh;
+  border-radius: 0;
+  border-width: 0 0 0 1px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slide 0.18s ease-out;
+}
+
+.drawer .body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.drawer .footer {
+  justify-content: space-between;
+  background: var(--bg);
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(1.5rem);
+  }
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -90,7 +124,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop,
-  .dialog {
+  .dialog,
+  .drawer {
     animation: none;
   }
 }

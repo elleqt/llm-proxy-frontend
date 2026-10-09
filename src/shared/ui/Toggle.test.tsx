@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { Toggle } from "./Toggle";
+import styles from "./Toggle.module.css";
 
 function Harness() {
   const [on, setOn] = useState(false);
@@ -33,5 +34,14 @@ describe("Toggle", () => {
     await user.tab();
 
     expect(screen.getByRole("switch", { name: "Locked" })).not.toHaveFocus();
+  });
+});
+
+describe("Toggle hideLabel", () => {
+  it("keeps the accessible name while hiding the label text", () => {
+    render(<Toggle label="Enabled: claude" checked onChange={() => {}} hideLabel />);
+
+    expect(screen.getByRole("switch", { name: "Enabled: claude" })).toBeInTheDocument();
+    expect(screen.getByText("Enabled: claude")).toHaveClass(styles.hidden!);
   });
 });
