@@ -244,7 +244,9 @@ function proxyRefusal(input: Schemas["AccountProxyInput"] | undefined) {
   if (input === undefined || input.mode !== "custom") return input?.url ? "proxy.url" : null;
   try {
     const url = new URL(input.url ?? "");
-    return ["http:", "https:", "socks5:", "socks5h:"].includes(url.protocol) && url.hostname !== "" ? null : "proxy.url";
+    if (!["http:", "https:", "socks5:", "socks5h:"].includes(url.protocol) || url.hostname === "") return "proxy.url";
+    // Upstream dials a SOCKS host as given: without a port it cannot connect.
+    return url.protocol.startsWith("socks5") && url.port === "" ? "proxy.url" : null;
   } catch {
     return "proxy.url";
   }

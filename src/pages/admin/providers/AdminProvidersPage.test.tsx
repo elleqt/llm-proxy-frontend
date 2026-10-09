@@ -588,6 +588,41 @@ describe("OpenAI-compatible providers", () => {
     });
   });
 
+  it("needs a key or a typed proxy URL to discover while the stored key is removed behind a stored own proxy", async () => {
+    const stored = { mode: "custom" as const, url: "http://proxy.example.com:3128", hasCredentials: true };
+    providers([{ ...compatAccount({ hasApiKey: true }), proxy: stored }]);
+    const discovers: Schemas["CompatDiscoverRequest"][] = [];
+    server.use(
+      http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+        discovers.push(await request.json());
+        return response(200).json({ models: ["model-a"], conflicts: {} });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    const discover = within(dialog).getByRole("button", { name: en["compat.discover"] });
+    expect(discover).toBeEnabled();
+    expect(within(dialog).queryByText(en["compat.discoverNeedsKey"])).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByLabelText(en["compat.clearKey"]));
+    expect(discover).toBeDisabled();
+    expect(within(dialog).getByText(en["compat.discoverNeedsKey"])).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText(en["proxy.url"]), "http://new.example.com:8080");
+    expect(discover).toBeEnabled();
+    expect(within(dialog).queryByText(en["compat.discoverNeedsKey"])).not.toBeInTheDocument();
+    await user.click(discover);
+    await waitFor(() => expect(discovers).toHaveLength(1));
+    expect(discovers[0]).toEqual({
+      baseURL: "https://api.example.com/v1",
+      proxy: { mode: "custom", url: "http://new.example.com:8080" },
+    });
+    expect(discovers[0]).not.toHaveProperty("accountId");
+  });
+
   it("shows the vendor's refusal of the key as its code's text", async () => {
     providers([]);
     server.use(

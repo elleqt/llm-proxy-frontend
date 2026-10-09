@@ -423,6 +423,8 @@ export const en = {
   "compat.apiKeyKeepHint": "A key is stored. Leave empty to keep it.",
   "compat.apiKeyMovedHint": "The stored key belongs to the old base URL. Type the key again for the new one, or remove it.",
   "compat.clearKey": "Remove the stored key",
+  "compat.discoverNeedsKey":
+    "Discovery goes through the stored own proxy, which needs the provider's key: type a key, or type the proxy URL again.",
   "compat.prefix": "Model prefix",
   "compat.prefixHint": "Optional. Clients then request prefix/model.",
   "compat.models": "Models",
