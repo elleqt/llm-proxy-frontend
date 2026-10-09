@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
+import { accountName, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { QuotaMeters } from "../../entities/provider/QuotaMeters";
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
@@ -54,13 +54,35 @@ export function AccountDrawer({
     event.preventDefault();
     save.mutate();
   };
+  const status = account.disabled
+    ? t("providers.disabled")
+    : account.status === "active"
+      ? t("providers.status.active")
+      : account.status === "error"
+        ? t("providers.status.error")
+        : account.status;
+  const refreshed =
+    account.lastRefreshedAt == null
+      ? t("providers.never")
+      : shortDateTime(Date.parse(account.lastRefreshedAt), now, lang);
   return (
     <>
       <Modal
         open
         variant="drawer"
         onClose={guard.requestClose}
-        title={account.provider}
+        title={
+          <span className={styles.title}>
+            {/* Decorative: the State section says the same in words. */}
+            <span
+              aria-hidden
+              className={styles.dot}
+              data-status={account.disabled ? "disabled" : account.status}
+              title={`${status} · ${t("providers.refreshed")}: ${refreshed}`}
+            />
+            {`${account.provider} · ${accountName(account)}`}
+          </span>
+        }
         footer={
           <>
             <span>{removeAction}</span>
@@ -80,21 +102,9 @@ export function AccountDrawer({
             </h3>
             <dl className={styles.facts}>
               <dt>{t("admin.status")}</dt>
-              <dd>
-                {account.disabled
-                  ? t("providers.disabled")
-                  : account.status === "active"
-                    ? t("providers.status.active")
-                    : account.status === "error"
-                      ? t("providers.status.error")
-                      : account.status}
-              </dd>
+              <dd>{status}</dd>
               <dt>{t("providers.refreshed")}</dt>
-              <dd>
-                {account.lastRefreshedAt == null
-                  ? t("providers.never")
-                  : shortDateTime(Date.parse(account.lastRefreshedAt), now, lang)}
-              </dd>
+              <dd>{refreshed}</dd>
               <dt>{t("providers.quota")}</dt>
               <dd>
                 <QuotaMeters quota={account.quota} now={now} />

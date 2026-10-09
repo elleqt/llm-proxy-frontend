@@ -49,7 +49,7 @@ describe("ProxyCell", () => {
     Object.defineProperty(HTMLSpanElement.prototype, "scrollWidth", { configurable: true, get: () => 300 });
     Object.defineProperty(HTMLSpanElement.prototype, "clientWidth", { configurable: true, get: () => 100 });
     cell(own);
-    const line = screen.getByLabelText(`socks5://proxy.example.com:1080, ${en["proxy.withCredentials"]}`);
+    const line = screen.getByRole("group", { name: `socks5://proxy.example.com:1080, ${en["proxy.withCredentials"]}` });
     expect(line).toHaveAttribute("tabIndex", "0");
   });
 

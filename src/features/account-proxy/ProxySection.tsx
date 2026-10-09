@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useRef } from "react";
 import { useT } from "../../shared/i18n";
 import { Button, LockIcon, TextField } from "../../shared/ui";
 import { PROXY_MODES, proxyDraft, proxyParts, type AccountProxy, type ProxyDraft } from "./proxy";
@@ -33,6 +33,8 @@ export function ProxySection({
   const headingId = useId();
   const name = useId();
   const storedOwn = stored?.mode === "custom";
+  // Cancel in Replace hands focus back to the Replace button it brings back.
+  const refocusReplace = useRef(false);
   const parts = stored?.url === undefined ? null : proxyParts(stored.url);
   return (
     <section className={styles.section} aria-labelledby={headingId}>
@@ -50,7 +52,7 @@ export function ProxySection({
               checked={value.mode === mode}
               onChange={() => onChange({ ...value, mode })}
             />
-            <span>{t(`proxy.${mode}`)}</span>
+            <span>{t(mode === "custom" ? "proxy.ownSegment" : `proxy.${mode}`)}</span>
           </label>
         ))}
       </div>
@@ -68,7 +70,17 @@ export function ProxySection({
               </>
             )}
             {stored.hasCredentials === true && <LockIcon label={t("proxy.withCredentials")} />}
-            <Button onClick={() => onChange({ ...value, replacing: true })}>{t("proxy.replace")}</Button>
+            <Button
+              ref={(button) => {
+                if (button !== null && refocusReplace.current) {
+                  refocusReplace.current = false;
+                  button.focus();
+                }
+              }}
+              onClick={() => onChange({ ...value, replacing: true })}
+            >
+              {t("proxy.replace")}
+            </Button>
           </div>
         ) : (
           <div className={styles.replace}>
@@ -87,7 +99,14 @@ export function ProxySection({
               error={error}
             />
             {storedOwn && (
-              <Button onClick={() => onChange({ ...value, replacing: false, url: "" })}>{t("proxy.cancelReplace")}</Button>
+              <Button
+                onClick={() => {
+                  refocusReplace.current = true;
+                  onChange({ ...value, replacing: false, url: "" });
+                }}
+              >
+                {t("proxy.cancelReplace")}
+              </Button>
             )}
           </div>
         ))}
