@@ -6,7 +6,7 @@ import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { cached } from "../../../test/cache";
 import { renderApp } from "../../../test/render";
-import { fixtures, http, server, type Schemas } from "../../../test/server";
+import { errorResponse, fixtures, http, server, type Schemas } from "../../../test/server";
 
 const AUTH_URL = "https://auth.example.com/authorize?state=example";
 const CALLBACK = "http://localhost:54545/callback?code=example&state=example";
@@ -777,6 +777,10 @@ describe("OpenAI-compatible providers", () => {
 
       expect(within(dialog).getByRole("alert")).toHaveTextContent(en["compat.pickLevels"]);
       expect(updates).toEqual([]);
+
+      // Checking a level again takes the refusal away.
+      await user.click(block.getByRole("checkbox", { name: "high" }));
+      expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
     });
 
     it("hold Save while the default set loads", async () => {
@@ -814,6 +818,34 @@ describe("OpenAI-compatible providers", () => {
       await user.click(save);
       await waitFor(() => expect(updates).toHaveLength(1));
       expect(updates[0]?.models).toEqual([{ name: "model-a" }]);
+    });
+
+    it("say once that the default set failed to load, and keep Save from sending", async () => {
+      server.use(
+        http.get("/api/admin/providers/compat/defaults", ({ response }) =>
+          response.untyped(errorResponse(500, { code: "internal", message: "boom" })),
+        ),
+      );
+      providers([compatAccount({ models: [{ name: "model-a" }, { name: "model-b" }] })]);
+      const updates: Schemas["CompatProviderUpdate"][] = [];
+      server.use(
+        http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+          updates.push(await request.json());
+          return response(200).json(compatAccount());
+        }),
+      );
+      const user = userEvent.setup();
+      renderApp("/admin/providers");
+      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.internal"]);
+      // Two picked models, one alert: the failure belongs to the form, not to each row.
+      expect(within(dialog).getAllByRole("alert")).toHaveLength(1);
+      const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
+      expect(save).toBeDisabled();
+      await user.click(save);
+      expect(updates).toEqual([]);
     });
   });
 });

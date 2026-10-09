@@ -291,21 +291,18 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
                     {row.picked && others !== undefined && others.length > 0 && (
                       <p className={styles.warning}>{fill(t("compat.conflict"), { providers: others.join(", ") })}</p>
                     )}
-                    {row.picked &&
-                      (defaults.data !== undefined ? (
-                        <ReasoningLevels
-                          model={row.name}
-                          levels={row.levels}
-                          defaults={defaults.data.reasoningLevels}
-                          onChange={(levels) =>
-                            setRows((current) => current.map((r) => (r.name === row.name ? { ...r, levels } : r)))
-                          }
-                        />
-                      ) : defaults.isError ? (
-                        <p role="alert">{errorMessage(defaults.error)}</p>
-                      ) : (
-                        <Spinner label={t("compat.levelsLoading")} />
-                      ))}
+                    {row.picked && defaults.data !== undefined && (
+                      <ReasoningLevels
+                        model={row.name}
+                        levels={row.levels}
+                        defaults={defaults.data.reasoningLevels}
+                        onChange={(levels) => {
+                          setLevelsError(false);
+                          setRows((current) => current.map((r) => (r.name === row.name ? { ...r, levels } : r)));
+                        }}
+                      />
+                    )}
+                    {row.picked && defaults.isPending && <Spinner label={t("compat.levelsLoading")} />}
                   </li>
                 );
               })}
@@ -334,10 +331,17 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
           {levelsError && <p role="alert">{t("compat.pickLevels")}</p>}
         </fieldset>
 
+        {/* Once, for the whole form: without the default set no model's levels can be judged, so nothing saves. */}
+        {defaults.isError && <p role="alert">{errorMessage(defaults.error)}</p>}
         {save.isError && !fieldShown && <p role="alert">{errorMessage(save.error)}</p>}
         <div className={styles.actions}>
           <Button onClick={onClose}>{t("ui.cancel")}</Button>
-          <Button type="submit" variant="primary" busy={save.isPending || defaults.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            busy={save.isPending || defaults.isPending}
+            disabled={defaults.isError}
+          >
             {existing === undefined ? t("compat.save") : t("compat.saveEdit")}
           </Button>
         </div>
