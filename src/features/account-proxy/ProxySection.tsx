@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 import { useT } from "../../shared/i18n";
 import { Button, LockIcon, TextField } from "../../shared/ui";
+import { OwnProxyLine } from "./ProxyCell";
 import { PROXY_MODES, proxyDraft, proxyParts, type AccountProxy, type ProxyDraft } from "./proxy";
 import styles from "./ProxySection.module.css";
 
@@ -61,15 +62,22 @@ export function ProxySection({
       {value.mode === "custom" &&
         (storedOwn && !value.replacing ? (
           <div className={styles.stored}>
-            {parts === null ? (
-              <span>{stored.url ?? t("proxy.unreadable")}</span>
-            ) : (
+            {parts === null || stored.url === undefined ? (
               <>
-                <span className={styles.tag}>{parts.scheme}</span>
-                <span className={styles.host}>{parts.host}</span>
+                <span>{stored.url ?? t("proxy.unreadable")}</span>
+                {stored.hasCredentials === true && <LockIcon label={t("proxy.withCredentials")} />}
               </>
+            ) : (
+              // The list's line: one line, its tail faded when it does not fit, in full on hover or focus.
+              <span className={styles.line}>
+                <OwnProxyLine
+                  url={stored.url}
+                  scheme={parts.scheme}
+                  host={parts.host}
+                  hasCredentials={stored.hasCredentials === true}
+                />
+              </span>
             )}
-            {stored.hasCredentials === true && <LockIcon label={t("proxy.withCredentials")} />}
             <Button
               ref={(button) => {
                 if (button !== null && refocusReplace.current) {

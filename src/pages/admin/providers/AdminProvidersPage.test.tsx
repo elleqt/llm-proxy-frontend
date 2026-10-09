@@ -219,7 +219,7 @@ describe("account list", () => {
     expect(screen.queryByRole("heading", { name: en["providers.subscriptions"] })).not.toBeInTheDocument();
   });
 
-  it("shows four models and the rest behind +N, opened from the keyboard or by a click", async () => {
+  it("shows four models and the rest behind +N, opened from the keyboard, by a click or by hover", async () => {
     providers([
       compatAccount({
         models: [
@@ -264,6 +264,18 @@ describe("account list", () => {
 
     await user.click(more);
     expect(popover()).not.toBeNull();
+    // A click on the open popover's button closes it again.
+    await user.click(more);
+    expect(popover()).toBeNull();
+
+    // The pointer opens it too, and takes it away on leaving (focus gone first).
+    act(() => more.blur());
+    await user.unhover(more);
+    expect(popover()).toBeNull();
+    await user.hover(more);
+    expect(popover()).not.toBeNull();
+    await user.unhover(more);
+    expect(popover()).toBeNull();
   });
 
   it("removes an account only once its name is typed", async () => {
@@ -1060,6 +1072,8 @@ describe("OpenAI-compatible providers", () => {
       expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.internal"]);
       // Two picked models, one alert: the failure belongs to the form, not to each row.
       expect(within(dialog).getAllByRole("alert")).toHaveLength(1);
+      // A change to save, so only the failed load holds Save back.
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
       const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
       expect(save).toBeDisabled();
       await user.click(save);

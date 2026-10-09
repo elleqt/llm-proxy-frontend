@@ -57,26 +57,14 @@
   min-width: 0;
 }
 
-.tag {
-  flex: none;
-  padding: 0 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--dim);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-}
-
-/* The drawer shows the full address: it wraps rather than fades. */
-.host {
+/* The stored address takes the room left of Replace and stays on one line (the list's fade). */
+.line {
+  flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.875rem;
 }
 
 .stored > button {
+  flex: none;
   margin-left: auto;
 }
 

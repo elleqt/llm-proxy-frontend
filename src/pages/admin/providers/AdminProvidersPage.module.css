@@ -23,17 +23,23 @@
   color: var(--dim);
 }
 
-/* One grid for the header and every row of a group, so the columns line up. */
+/*
+ * One grid for the header and every row of a group, so the columns line up. The actions
+ * track has a fixed width (switch and two icon buttons), the same in the header, which
+ * has no actions to size an `auto` track by.
+ */
 .head,
 .row {
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr) 12.5rem auto;
+  grid-template-columns: 14rem minmax(0, 1fr) 12.5rem 7rem;
   grid-template-areas: "who main proxy actions";
   gap: 1rem;
   padding-inline: 1rem;
 }
 
 .head {
+  /* The rows sit inside the list's 1px border. */
+  padding-inline: calc(1rem + 1px);
   padding-bottom: 0.3rem;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -137,7 +143,9 @@
   padding: 0 0.4rem;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.75rem;
-  white-space: nowrap;
+  /* A very long model name wraps inside the column rather than widening it. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
   background: var(--code);
   border: 1px solid var(--line);
   border-radius: 5px;

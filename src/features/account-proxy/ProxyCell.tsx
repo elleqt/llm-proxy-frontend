@@ -15,10 +15,11 @@ export function ProxyCell({ proxy }: { proxy: AccountProxy }) {
 }
 
 /**
- * Fades the host's tail when it overflows the column; then the line is
- * focusable and, on hover or focus, rises over its neighbours in full.
+ * A stored own proxy as one line that never wraps, in the list and in the drawer.
+ * Fades the host's tail when it overflows its room; then the line is focusable
+ * and, on hover or focus, rises over its neighbours in full.
  */
-function OwnProxyLine({
+export function OwnProxyLine({
   url,
   scheme,
   host,
