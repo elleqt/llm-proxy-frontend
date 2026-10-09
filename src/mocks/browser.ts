@@ -239,6 +239,32 @@ function shownProxy(input: Schemas["AccountProxyInput"] | undefined): Schemas["A
   return { mode: "custom", url: `${url.protocol}//${url.host}`, hasCredentials: url.username !== "" || url.password !== "" };
 }
 
+const DEFAULT_REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/**
+ * The models with each own reasoning list normalised (trimmed, lower-cased) like the backend, or null when a list is
+ * refused: a value off `^[a-z][a-z0-9_-]{0,31}$`, a duplicate, more than 16 values, or an empty list. A model without
+ * a list stays without the key.
+ */
+function withReasoningLevels(models: Schemas["CompatModel"][]) {
+  const out: Schemas["CompatModel"][] = [];
+  for (const { reasoningLevels, ...model } of models) {
+    if (reasoningLevels === undefined) {
+      out.push(model);
+      continue;
+    }
+    const levels = reasoningLevels.map((l) => l.trim().toLowerCase());
+    const valid =
+      levels.length >= 1 &&
+      levels.length <= 16 &&
+      new Set(levels).size === levels.length &&
+      levels.every((l) => /^[a-z][a-z0-9_-]{0,31}$/.test(l));
+    if (!valid) return null;
+    out.push({ ...model, reasoningLevels: levels });
+  }
+  return out;
+}
+
 /** The backend's refusal of a proxy choice it cannot use, or null. */
 function proxyRefusal(input: Schemas["AccountProxyInput"] | undefined) {
   if (input === undefined || input.mode !== "custom") return input?.url ? "proxy.url" : null;
@@ -917,6 +943,9 @@ const handlers = [
     accounts = accounts.filter((a) => a.id !== params.accountId);
     return new HttpResponse(null, { status: 204 });
   }),
+  http.get("/api/admin/providers/compat/defaults", ({ response }) =>
+    response(200).json({ reasoningLevels: [...DEFAULT_REASONING_LEVELS] }),
+  ),
   http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
     const { baseURL, apiKey, proxy } = await request.json();
     if (!/^https?:\/\/[^/]/.test(baseURL)) {
@@ -940,6 +969,8 @@ const handlers = [
     }
     const refused = proxyRefusal(body.proxy);
     if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const models = withReasoningLevels(body.models);
+    if (models === null) return response(422).json({ code: "invalid_input", message: "", field: "models" });
     const account: Schemas["ProviderAccount"] = {
       id,
       provider: body.name,
@@ -956,7 +987,7 @@ const handlers = [
         baseURL: body.baseURL.replace(/\/+$/, ""),
         ...(body.prefix === undefined ? {} : { prefix: body.prefix }),
         hasApiKey: (body.apiKey ?? "") !== "",
-        models: body.models,
+        models,
       },
     };
     accounts = [...accounts, account];
@@ -968,11 +999,13 @@ const handlers = [
     if (account?.compat === undefined) return response.untyped(notFound());
     const refused = proxyRefusal(body.proxy);
     if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const models = withReasoningLevels(body.models);
+    if (models === null) return response(422).json({ code: "invalid_input", message: "", field: "models" });
     const hasApiKey = body.apiKey !== undefined ? body.apiKey !== "" : body.clearApiKey ? false : account.compat.hasApiKey;
     const updated: Schemas["ProviderAccount"] = {
       ...account,
       proxy: body.proxy === undefined ? account.proxy : shownProxy(body.proxy),
-      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models: body.models },
+      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models },
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);
