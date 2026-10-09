@@ -1,5 +1,4 @@
 import type { components } from "../../shared/api/schema";
-import type { MessageKey } from "../../shared/i18n";
 
 export type AccountProxy = components["schemas"]["AccountProxy"];
 export type AccountProxyInput = components["schemas"]["AccountProxyInput"];
@@ -26,14 +25,6 @@ export function proxyChanged(draft: ProxyDraft, stored: AccountProxy | undefined
 /** The request body for a draft: only an own proxy carries a URL. */
 export function proxyInput(draft: ProxyDraft): AccountProxyInput {
   return draft.mode === "custom" ? { mode: "custom", url: draft.url.trim() } : { mode: draft.mode };
-}
-
-/** How the table names an account's proxy. */
-export function proxyLabel(proxy: AccountProxy, t: (key: MessageKey) => string): string {
-  if (proxy.mode === "inherit") return t("proxy.inherit");
-  if (proxy.mode === "direct") return t("proxy.direct");
-  if (proxy.url === undefined) return t("proxy.unreadable");
-  return proxy.hasCredentials ? `${proxy.url} · ${t("proxy.withCredentials")}` : proxy.url;
 }
 
 /** A stored proxy address (`scheme://host:port`, never credentials) as its scheme tag and its host; null when it is not one. */

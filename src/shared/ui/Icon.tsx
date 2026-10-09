@@ -76,7 +76,7 @@ export function ChevronIcon({ label }: IconProps) {
 export interface IconButtonProps extends ComponentProps<"button"> {
   /** Accessible name and tooltip; the icon itself stays decorative. */
   label: string;
-  /** `danger`: a destructive action, the only use of the `--danger` colour. */
+  /** `danger`: a destructive action, in `--danger`, the colour of destructive actions and the error state. */
   tone?: "neutral" | "danger";
   children: ReactNode;
 }

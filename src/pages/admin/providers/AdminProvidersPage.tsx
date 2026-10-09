@@ -1,25 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
 import { QuotaMeters } from "../../../entities/provider/QuotaMeters";
-import { proxyLabel } from "../../../features/account-proxy/proxy";
+import { accountStatus, StatusDot } from "../../../entities/provider/StatusDot";
+import { AccountDrawer } from "../../../features/account-proxy/AccountDrawer";
+import { ProxyCell } from "../../../features/account-proxy/ProxyCell";
 import { CompatDrawer } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
-import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
+import type { components } from "../../../shared/api/schema";
+import { useErrorMessage, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
-import { Badge, Button, EmptyState, Spinner, Table, type Column } from "../../../shared/ui";
+import { EmptyState, IconButton, PencilIcon, Spinner, Toggle, TrashIcon } from "../../../shared/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
-import styles from "../admin.module.css";
-import { shortDateTime } from "../../../shared/lib/dates";
+import admin from "../admin.module.css";
+import styles from "./AdminProvidersPage.module.css";
+
+/** Models a compat row shows as tags; the rest wait behind "+N". */
+const SHOWN_MODELS = 4;
 
 export function AdminProvidersPage() {
   const t = useT();
-  const [lang] = useLang();
   const errorMessage = useErrorMessage();
   const accounts = useQuery(providerAccountsQuery);
+  // Where focus goes when the row that held it is removed.
   const listRef = useRef<HTMLDivElement>(null);
-  const dateTime = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" });
   // "resets in 4 h 12 min" counts down while the page is open.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -27,109 +32,15 @@ export function AdminProvidersPage() {
     return () => clearInterval(timer);
   }, []);
   const [addingCompat, setAddingCompat] = useState(false);
-
-  const columns: Column<ProviderAccount>[] = [
-    {
-      id: "provider",
-      header: t("providers.provider"),
-      mono: true,
-      sortValue: (a) => a.provider,
-      cell: (a) => a.provider,
-    },
-    {
-      id: "name",
-      header: t("providers.account"),
-      sortValue: (a) => accountName(a),
-      // A long address wraps anywhere rather than widening the table. An
-      // OpenAI-compatible provider is named by its provider column; its base
-      // URL says where it goes.
-      cell: (a) => {
-        const shown = a.compat?.baseURL ?? accountName(a);
-        return (
-          <span className={styles.accountName} title={shown}>
-            {shown}
-          </span>
-        );
-      },
-    },
-    {
-      id: "status",
-      header: t("admin.status"),
-      sortValue: (a) => (a.disabled ? "disabled" : a.status),
-      cell: (a) =>
-        a.disabled ? (
-          <Badge tone="muted">{t("providers.disabled")}</Badge>
-        ) : (
-          <Badge tone={a.status === "active" ? "accent" : "neutral"}>
-            {/* The vendor's own word when it is not one the interface knows. */}
-            {a.status === "active"
-              ? t("providers.status.active")
-              : a.status === "error"
-                ? t("providers.status.error")
-                : a.status}
-          </Badge>
-        ),
-    },
-    {
-      id: "proxy",
-      header: t("proxy.column"),
-      sortValue: (a) => a.proxy.mode,
-      cell: (a) => (
-        <span className={a.proxy.mode === "inherit" ? styles.dim : undefined}>{proxyLabel(a.proxy, t)}</span>
-      ),
-    },
-    {
-      id: "lastError",
-      header: t("providers.lastError"),
-      cell: (a) =>
-        a.lastError ? (
-          <span className={`${styles.error} ${styles.lastError}`}>{a.lastError}</span>
-        ) : (
-          <span className={styles.dim}>—</span>
-        ),
-    },
-    {
-      id: "refreshed",
-      header: <span title={t("providers.refreshedHint")}>{t("providers.refreshed")}</span>,
-      sortValue: (a) => (a.lastRefreshedAt == null ? null : Date.parse(a.lastRefreshedAt)),
-      cell: (a) => (
-        <>
-          {/* The header, repeated where a narrow screen lays the row out as a card. */}
-          <span className={styles.rateLabel}>{t("providers.refreshed")}</span>
-          {a.lastRefreshedAt == null ? (
-            <span className={styles.never}>{t("providers.never")}</span>
-          ) : (
-            <span title={dateTime.format(new Date(a.lastRefreshedAt))}>
-              {shortDateTime(Date.parse(a.lastRefreshedAt), now, lang)}
-            </span>
-          )}
-        </>
-      ),
-    },
-    {
-      id: "quota",
-      header: t("providers.quota"),
-      cell: (a) => <QuotaMeters quota={a.quota} now={now} />,
-    },
-    {
-      id: "actions",
-      header: <span className={styles.visuallyHidden}>{t("tokens.actions")}</span>,
-      align: "end",
-      cell: (a) => (
-        <div className={styles.stackedActions}>
-          <EditCompat account={a} />
-          <DisableToggle account={a} />
-          <RemoveAccount account={a} returnFocus={listRef} />
-        </div>
-      ),
-    },
-  ];
+  // In the API's order: provider, then account.
+  const subscriptions = accounts.data?.filter((a) => a.compat === undefined) ?? [];
+  const compat = accounts.data?.filter((a) => a.compat !== undefined) ?? [];
 
   return (
-    <>
-      <div className={styles.titleRow}>
+    <div className={styles.page}>
+      <div className={admin.titleRow}>
         <h1>{t("page.admin.providers.title")}</h1>
-        <div className={styles.actions}>
+        <div className={admin.actions}>
           <AddProviderAccount onCompat={() => setAddingCompat(true)} />
         </div>
         {addingCompat && <CompatDrawer onClose={() => setAddingCompat(false)} />}
@@ -141,34 +52,228 @@ export function AdminProvidersPage() {
       ) : accounts.data.length === 0 ? (
         <EmptyState title={t("providers.empty")} body={t("providers.emptyBody")} />
       ) : (
-        <div ref={listRef} tabIndex={-1} className={styles.providerTable}>
-          <Table label={t("page.admin.providers.title")} columns={columns} rows={accounts.data} rowKey={(a) => a.id} />
+        <div ref={listRef} tabIndex={-1} className={styles.groups}>
+          {subscriptions.length > 0 && (
+            <Group
+              title={t("providers.subscriptions")}
+              columns={[t("providers.account"), t("providers.quota"), t("proxy.column")]}
+              accounts={subscriptions}
+              now={now}
+              listRef={listRef}
+            />
+          )}
+          {compat.length > 0 && (
+            <Group
+              title={t("providers.compatGroup")}
+              columns={[t("providers.provider"), t("compat.models"), t("proxy.column")]}
+              accounts={compat}
+              now={now}
+              listRef={listRef}
+            />
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
-/** The "Edit" action of an OpenAI-compatible provider's row. */
-function EditCompat({ account }: { account: ProviderAccount }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  if (account.compat === undefined) return null;
+/** A group of accounts under its heading, with column headers lined up on its rows. */
+function Group({
+  title,
+  columns,
+  accounts,
+  now,
+  listRef,
+}: {
+  title: string;
+  columns: string[];
+  accounts: ProviderAccount[];
+  now: number;
+  listRef: RefObject<HTMLElement | null>;
+}) {
+  const headingId = useId();
   return (
-    <>
-      <Button aria-label={fill(t("compat.editLabel"), { name: account.compat.name })} onClick={() => setOpen(true)}>
-        {t("compat.edit")}
-      </Button>
-      {open && <CompatDrawer account={account} onClose={() => setOpen(false)} />}
-    </>
+    <section aria-labelledby={headingId}>
+      <h2 id={headingId} className={styles.groupTitle}>
+        {title}
+      </h2>
+      {/* Visual only: each row names its parts itself. */}
+      <div aria-hidden className={styles.head}>
+        {columns.map((column) => (
+          <span key={column}>{column}</span>
+        ))}
+        <span />
+      </div>
+      {/* `role` restores the list semantics `list-style: none` takes away in some browsers. */}
+      <ul role="list" className={styles.rows}>
+        {accounts.map((account) => (
+          <AccountRow key={account.id} account={account} now={now} listRef={listRef} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function DisableToggle({ account }: { account: ProviderAccount }) {
+/** One account: who it is, its quotas or models, its proxy, and its actions; the pencil opens its drawer. */
+function AccountRow({
+  account,
+  now,
+  listRef,
+}: {
+  account: ProviderAccount;
+  now: number;
+  listRef: RefObject<HTMLElement | null>;
+}) {
+  const t = useT();
+  const id = useId();
+  const [editing, setEditing] = useState(false);
+  const name = accountName(account);
+  const compat = account.compat;
+  const remove = <RemoveAccount account={account} returnFocus={listRef} />;
+  return (
+    <li className={styles.row} data-disabled={account.disabled || undefined} aria-labelledby={`${id}-name ${id}-sub`}>
+      <div className={styles.who}>
+        <div className={styles.name}>
+          <StatusDot account={account} now={now} />
+          <span id={`${id}-name`}>{compat?.name ?? account.provider}</span>
+          {/* The dot's state in words. */}
+          <span className={styles.visuallyHidden}>{accountStatus(account, t)}</span>
+        </div>
+        <div id={`${id}-sub`} className={compat === undefined ? styles.sub : `${styles.sub} ${styles.mono}`}>
+          {compat?.baseURL ?? name}
+        </div>
+        {account.lastError && <p className={styles.lastError}>{account.lastError}</p>}
+      </div>
+      <div className={styles.main}>
+        {compat === undefined ? (
+          <QuotaMeters quota={account.quota} now={now} />
+        ) : (
+          <ModelTags models={compat.models} name={compat.name} />
+        )}
+      </div>
+      <div className={styles.proxy}>
+        <ProxyCell proxy={account.proxy} />
+      </div>
+      <div className={styles.actions}>
+        <EnabledToggle account={account} />
+        <IconButton label={fill(t("providers.editLabel"), { name })} onClick={() => setEditing(true)}>
+          <PencilIcon />
+        </IconButton>
+        {remove}
+      </div>
+      {editing &&
+        (compat === undefined ? (
+          <AccountDrawer account={account} onClose={() => setEditing(false)} removeAction={remove} now={now} />
+        ) : (
+          <CompatDrawer account={account} onClose={() => setEditing(false)} removeAction={remove} />
+        ))}
+    </li>
+  );
+}
+
+type CompatModel = components["schemas"]["CompatModel"];
+
+function ModelTag({ model }: { model: CompatModel }) {
+  return (
+    <li className={styles.tag}>
+      {model.name}
+      {model.alias !== undefined && <span className={styles.alias}> → {model.alias}</span>}
+    </li>
+  );
+}
+
+/** A compat provider's served models as tags: the first four, the rest behind a "+N" popover. */
+function ModelTags({ models, name }: { models: CompatModel[]; name: string }) {
+  const t = useT();
+  const rest = models.slice(SHOWN_MODELS);
+  return (
+    <ul className={styles.tags} aria-label={t("compat.models")}>
+      {models.slice(0, SHOWN_MODELS).map((model) => (
+        <ModelTag key={model.name} model={model} />
+      ))}
+      {rest.length > 0 && (
+        <li className={styles.more}>
+          <MoreModels models={rest} name={name} />
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/**
+ * The "+N" button and its non-modal popover of the remaining models. Hover, focus or a
+ * click opens it (a click pins it); Escape and focus leaving close it.
+ */
+function MoreModels({ models, name }: { models: CompatModel[]; name: string }) {
+  const t = useT();
+  const popoverId = useId();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const open = !dismissed && (hovered || focused || pinned);
+  useEffect(() => {
+    if (!open) return;
+    // Wherever focus is: the popover may have opened under the pointer.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPinned(false);
+      setDismissed(true);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+  return (
+    <span
+      onMouseEnter={() => {
+        setHovered(true);
+        setDismissed(false);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        type="button"
+        className={styles.moreButton}
+        aria-label={fill(t("providers.moreModels"), { n: models.length })}
+        aria-expanded={open}
+        aria-controls={popoverId}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          setPinned(false);
+          setDismissed(false);
+        }}
+        onClick={() => {
+          // A click pins an open popover, or closes a pinned one.
+          setPinned(!(open && pinned));
+          setDismissed(open && pinned);
+        }}
+      >
+        +{models.length}
+      </button>
+      <div
+        id={popoverId}
+        role="dialog"
+        aria-label={fill(t("providers.moreModelsTitle"), { name })}
+        className={styles.popover}
+        hidden={!open}
+      >
+        <ul className={styles.tags}>
+          {models.map((model) => (
+            <ModelTag key={model.name} model={model} />
+          ))}
+        </ul>
+      </div>
+    </span>
+  );
+}
+
+/** The row's "Enabled" switch: turning it off asks first, turning it on acts at once. */
+function EnabledToggle({ account }: { account: ProviderAccount }) {
   const t = useT();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const name = accountName(account);
   const update = useMutation({
     mutationFn: (disabled: boolean) =>
@@ -180,30 +285,29 @@ function DisableToggle({ account }: { account: ProviderAccount }) {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey });
-      setOpen(false);
+      setConfirming(false);
     },
   });
-  if (account.disabled) {
-    // Enabling puts a known account back in rotation: nothing to confirm.
-    return (
-      <>
-        <Button
-          aria-label={fill(t("providers.enableLabel"), { name })}
-          busy={update.isPending}
-          onClick={() => update.mutate(false)}
-        >
-          {t("providers.enable")}
-        </Button>
-        {update.isError && <span role="alert">{errorMessage(update.error)}</span>}
-      </>
-    );
-  }
   return (
     <>
-      <Button aria-label={fill(t("providers.disableLabel"), { name })} onClick={() => setOpen(true)}>
-        {t("providers.disable")}
-      </Button>
-      {open && (
+      <Toggle
+        label={fill(t("providers.enabledLabel"), { name })}
+        hideLabel
+        checked={!account.disabled}
+        onChange={(enabled) => {
+          if (update.isPending) return;
+          // Enabling puts a known account back in rotation: nothing to confirm.
+          if (enabled) update.mutate(false);
+          else setConfirming(true);
+        }}
+      />
+      {/* Only the enabling's failure: the confirmation shows its own. */}
+      {update.isError && !confirming && (
+        <p role="alert" className={styles.actionError}>
+          {errorMessage(update.error)}
+        </p>
+      )}
+      {confirming && (
         <ConfirmDialog
           title={fill(t("providers.disableTitle"), { name })}
           body={<p>{t("providers.disableBody")}</p>}
@@ -212,7 +316,7 @@ function DisableToggle({ account }: { account: ProviderAccount }) {
           error={update.isError ? errorMessage(update.error) : null}
           onConfirm={() => update.mutate(true)}
           onClose={() => {
-            setOpen(false);
+            setConfirming(false);
             update.reset();
           }}
         />
@@ -221,6 +325,7 @@ function DisableToggle({ account }: { account: ProviderAccount }) {
   );
 }
 
+/** The red trash button and its type-to-confirm dialog; the row and the drawer's footer both carry one. */
 function RemoveAccount({
   account,
   returnFocus,
@@ -243,9 +348,9 @@ function RemoveAccount({
   });
   return (
     <>
-      <Button aria-label={fill(t("providers.removeLabel"), { name })} onClick={() => setOpen(true)}>
-        {t("providers.remove")}
-      </Button>
+      <IconButton label={fill(t("providers.removeLabel"), { name })} tone="danger" onClick={() => setOpen(true)}>
+        <TrashIcon />
+      </IconButton>
       {open && (
         <ConfirmDialog
           title={fill(t("providers.removeTitle"), { name })}

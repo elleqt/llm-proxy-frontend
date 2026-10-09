@@ -18,12 +18,13 @@ type LoginSession = components["schemas"]["ProviderLoginSession"];
 type StartRequest = components["schemas"]["ProviderLoginStartRequest"];
 type CompleteRequest = components["schemas"]["ProviderLoginCompleteRequest"];
 
-/** The step-1 choice that leaves the sign-in wizard for the OpenAI-compatible form. */
+/** The step-1 choice that leaves the sign-in wizard for the OpenAI-compatible drawer. */
 const COMPAT = "openai-compatible";
 
 /**
  * The "Add provider" button and its wizard: a vendor sign-in in three steps, or,
- * chosen in step 1, `onCompat` — the page opens the OpenAI-compatible form.
+ * chosen in step 1, `onCompat`: the wizard closes and the page opens the
+ * OpenAI-compatible drawer with an empty form.
  */
 export function AddProviderAccount({ onCompat }: { onCompat: () => void }) {
   const t = useT();

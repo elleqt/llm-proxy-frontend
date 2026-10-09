@@ -6,8 +6,9 @@ export interface ButtonProps extends ComponentProps<"button"> {
   /**
    * `primary`: the one safe forward action of a view. `danger`: destroys
    * something (revoke, block, delete) — marked by weight and a glyph rather
-   * than colour. The palette's `--danger` red is used only by `IconButton`;
-   * text `danger` buttons keep the glyph. Never make a destructive action
+   * than colour. The palette's `--danger` red is for destructive actions
+   * (`IconButton`'s `danger` tone) and the error state; text `danger` buttons
+   * keep the glyph. Never make a destructive action
    * `primary`. Its confirmation dialog passes Cancel as the Modal's
    * `initialFocus`, and the confirm button repeats verb and object
    * ("Revoke key", "Block Alice"), never "OK".

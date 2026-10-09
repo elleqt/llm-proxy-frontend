@@ -311,7 +311,12 @@ export function CompatDrawer({
               error={onField("baseURL") ?? (discoverError?.field === "baseURL" ? errorMessage(discoverError) : undefined)}
             />
             {keyMode === "stored" || keyMode === "remove" ? (
-              <div role="group" aria-labelledby={keyLabelId} className={styles.keyField}>
+              <div
+                role="group"
+                aria-labelledby={keyLabelId}
+                aria-describedby={keyNeeded ? `${keyLabelId}-hint` : undefined}
+                className={styles.keyField}
+              >
                 <span id={keyLabelId} className={styles.label}>
                   {t("compat.apiKey")}
                 </span>
@@ -365,7 +370,11 @@ export function CompatDrawer({
                     </>
                   )}
                 </div>
-                {keyNeeded && <p className={styles.hint}>{t("compat.apiKeyMovedHint")}</p>}
+                {keyNeeded && (
+                  <p id={`${keyLabelId}-hint`} className={styles.hint}>
+                    {t("compat.apiKeyMovedHint")}
+                  </p>
+                )}
                 {onField("apiKey") !== undefined && <p role="alert">{onField("apiKey")}</p>}
               </div>
             ) : (

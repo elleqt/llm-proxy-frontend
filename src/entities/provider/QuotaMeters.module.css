@@ -4,21 +4,24 @@
   color: var(--dim);
 }
 
+/*
+ * A wide meter; the text keeps its line while there is room and wraps rather than
+ * spill into the next column. The windows share one grid, so their meters line up.
+ */
 .quotas {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(4rem, 1fr) auto;
+  gap: 0.2rem 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
-  min-width: 16rem;
 }
 
 .quota {
   display: grid;
-  grid-template-columns: 2.5rem 6rem auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 0.5rem;
   font-size: 0.85rem;
 }
 
@@ -43,16 +46,5 @@
 }
 
 .quotaText {
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 40rem) {
-  .quotas {
-    min-width: 0;
-  }
-
-  .quotaText {
-    white-space: normal;
-  }
 }

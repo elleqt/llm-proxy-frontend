@@ -320,7 +320,8 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "team@example.com",
     status: "error",
     disabled: false,
-    proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true },
+    // A long host: the list fades its tail and shows it in full on hover or focus.
+    proxy: { mode: "custom", url: "socks5://egress-gateway.corp.example.com:1080", hasCredentials: true },
     lastError: "refresh token rejected (401)",
     lastRefreshedAt: ago(26 * HOUR),
     quota: [
@@ -362,6 +363,45 @@ let accounts: Schemas["ProviderAccount"][] = [
     lastError: null,
     lastRefreshedAt: null,
     quota: [],
+  },
+  {
+    id: "openai-compatible-deepseek",
+    provider: "deepseek",
+    label: "deepseek",
+    email: null,
+    status: "active",
+    disabled: false,
+    proxy: { mode: "inherit" },
+    lastError: null,
+    lastRefreshedAt: null,
+    quota: [],
+    compat: {
+      name: "deepseek",
+      baseURL: "https://api.deepseek.example.com/v1",
+      hasApiKey: true,
+      // More than four: the list shows four and "+2".
+      models: [
+        { name: "deepseek-flash" },
+        { name: "deepseek-v4-pro" },
+        { name: "deepseek-chat", alias: "ds-chat" },
+        { name: "deepseek-reasoner", reasoningLevels: ["none", "high", "max"] },
+        { name: "deepseek-coder" },
+        { name: "deepseek-v3.2-exp" },
+      ],
+    },
+  },
+  {
+    id: "openai-compatible-ollama",
+    provider: "ollama",
+    label: "ollama",
+    email: null,
+    status: "active",
+    disabled: false,
+    proxy: { mode: "direct" },
+    lastError: null,
+    lastRefreshedAt: null,
+    quota: [],
+    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }] },
   },
 ];
 const loginSessions = new Map<string, { provider: string; expiresAt: number }>();
