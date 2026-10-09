@@ -19,3 +19,29 @@ export function sameLevels(a: readonly string[], b: readonly string[]): boolean 
 export function levelsInput(levels: readonly string[] | null, defaults: readonly string[]): string[] | undefined {
   return levels === null || sameLevels(levels, defaults) ? undefined : [...levels];
 }
+
+/** The provider-wide list the form shows, read from the per-model lists the API stores. */
+export type ProviderLevels = { kind: "default" } | { kind: "own"; levels: string[] } | { kind: "mixed" };
+
+/**
+ * Every model following the default set (a stored copy of it counts) is `default`; every
+ * model with the same own list is `own`, in the first model's order; anything else `mixed`.
+ */
+export function providerLevels(
+  models: readonly { reasoningLevels?: string[] }[],
+  defaults: readonly string[],
+): ProviderLevels {
+  const lists = models.map((model) => levelsInput(model.reasoningLevels ?? null, defaults));
+  const first = lists[0];
+  if (first === undefined) return lists.every((list) => list === undefined) ? { kind: "default" } : { kind: "mixed" };
+  return lists.every((list) => list !== undefined && sameLevels(list, first))
+    ? { kind: "own", levels: first }
+    : { kind: "mixed" };
+}
+
+export type LevelsKind = ProviderLevels["kind"];
+
+/** What a shown list is: `null` (nothing checked while models differ) is `mixed`. */
+export function levelsKind(value: readonly string[] | null, defaults: readonly string[]): LevelsKind {
+  return value === null ? "mixed" : levelsInput(value, defaults) === undefined ? "default" : "own";
+}

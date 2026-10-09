@@ -1,39 +1,35 @@
 import { useId, useState } from "react";
-import { useT } from "../../shared/i18n";
-import { fill } from "../../shared/lib/template";
-import { Badge, Button, Checkbox, TextField } from "../../shared/ui";
-import { KNOWN_LEVELS, LEVEL_PATTERN, levelsInput, sameLevels } from "./levels";
+import { useT, type MessageKey } from "../../shared/i18n";
+import { Badge, Button, TextField } from "../../shared/ui";
+import { KNOWN_LEVELS, LEVEL_PATTERN, levelsKind, type LevelsKind } from "./levels";
 import styles from "./ReasoningLevels.module.css";
 
 export interface ReasoningLevelsProps {
-  model: string;
-  /** The model's own list, or `null` while it follows the default set. */
-  levels: string[] | null;
+  /** The provider's list; `null` while its models have different lists (nothing checked). */
+  value: string[] | null;
   /** The server's default set. */
   defaults: readonly string[];
-  onChange: (levels: string[] | null) => void;
+  onChange: (list: string[]) => void;
+  /** Already-translated error, e.g. an empty list refused on save. */
+  error?: string | undefined;
 }
 
 /**
- * The `reasoning_effort` values a compat model passes to its vendor unchanged. Checking
- * exactly the default set returns the model to it, so the request then carries no list.
+ * The `reasoning_effort` values an OpenAI-compatible provider's models pass to the vendor
+ * unchanged: one list for the provider, as toggle chips. Reset returns to the default set.
  */
-export function ReasoningLevels({ model, levels, defaults, onChange }: ReasoningLevelsProps) {
+export function ReasoningLevels({ value, defaults, onChange, error }: ReasoningLevelsProps) {
   const t = useT();
-  const hintId = useId();
-  // Own values typed here stay on offer once unchecked, until the form closes.
+  const headingId = useId();
+  const tipId = useId();
+  // Own values typed here stay on offer once unchecked, until the drawer closes.
   const [added, setAdded] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
   const [typed, setTyped] = useState("");
   const [invalid, setInvalid] = useState(false);
-  const checked = levels ?? defaults;
-  const own = levelsInput(levels, defaults) !== undefined;
+  const checked = value ?? [];
   const options = [...new Set([...KNOWN_LEVELS, ...defaults, ...checked, ...added])];
-
-  // The checked levels in the order they are offered; the default set is stored as `null`.
-  const check = (offered: string[], isChecked: (level: string) => boolean) => {
-    const next = offered.filter(isChecked);
-    onChange(sameLevels(next, defaults) ? null : next);
-  };
+  const kind = levelsKind(value, defaults);
 
   const add = () => {
     const level = typed.trim().toLowerCase();
@@ -43,58 +39,153 @@ export function ReasoningLevels({ model, levels, defaults, onChange }: Reasoning
       return;
     }
     if (!options.includes(level)) setAdded((current) => [...current, level]);
-    check(options.includes(level) ? options : [...options, level], (l) => l === level || checked.includes(l));
+    // The checked levels in the order they are offered.
+    onChange([...options.filter((l) => l === level || checked.includes(l)), ...(options.includes(level) ? [] : [level])]);
     setTyped("");
+    setAdding(false);
   };
 
   return (
-    <fieldset className={styles.levels} aria-label={fill(t("compat.levelsFor"), { model })} aria-describedby={hintId}>
-      <legend className={styles.legend}>
-        {t("compat.levels")}{" "}
-        <Badge tone={own ? "accent" : "muted"}>{own ? t("compat.levelsOwn") : t("compat.levelsDefault")}</Badge>
-      </legend>
-      <div className={styles.options}>
+    <section className={styles.levels} aria-labelledby={headingId}>
+      <div className={styles.heading}>
+        <h4 id={headingId} className={styles.title}>
+          {t("compat.levels")}
+        </h4>
+        <HelpTip id={tipId} />
+        <Badge tone={kind === "own" ? "accent" : "muted"}>{t(LEVELS_MARK[kind])}</Badge>
+      </div>
+      <div className={styles.chips} role="group" aria-labelledby={headingId}>
         {options.map((level) => (
-          <Checkbox
+          <button
             key={level}
-            label={<span className={styles.mono}>{level}</span>}
-            checked={checked.includes(level)}
-            onChange={(event) => check(options, (l) => (l === level ? event.target.checked : checked.includes(l)))}
-          />
+            type="button"
+            className={styles.chip}
+            aria-pressed={checked.includes(level)}
+            // The checked levels in the order they are offered.
+            onClick={() => onChange(options.filter((l) => (l === level) !== checked.includes(l)))}
+          >
+            {level}
+          </button>
         ))}
+        {!adding && (
+          <button type="button" className={`${styles.chip} ${styles.addChip}`} onClick={() => setAdding(true)}>
+            + {t("compat.levelsAdd")}
+          </button>
+        )}
       </div>
-      <div className={styles.row}>
-        <TextField
-          label={t("compat.levelsAdd")}
-          value={typed}
-          mono
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(event) => {
-            setTyped(event.target.value);
-            setInvalid(false);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              add();
-            }
-          }}
-          error={invalid ? t("compat.levelsInvalid") : undefined}
-        />
-        <Button onClick={add} disabled={typed.trim() === ""}>
-          {t("compat.levelsAddButton")}
-        </Button>
-        <Button onClick={() => onChange(null)} disabled={!own} title={t("compat.levelsResetHint")}>
+      {adding && (
+        <div className={styles.row}>
+          <TextField
+            label={t("compat.levelsAdd")}
+            value={typed}
+            mono
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setInvalid(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                add();
+              } else if (event.key === "Escape") {
+                // Closes the field, not the drawer.
+                event.preventDefault();
+                setAdding(false);
+                setTyped("");
+                setInvalid(false);
+              }
+            }}
+            error={invalid ? t("compat.levelsInvalid") : undefined}
+          />
+          <Button onClick={add} disabled={typed.trim() === ""}>
+            {t("compat.levelsAddButton")}
+          </Button>
+        </div>
+      )}
+      {error !== undefined && (
+        <p role="alert" className={styles.error}>
+          {error}
+        </p>
+      )}
+      <p className={styles.hint}>
+        {t("compat.levelsAll")}{" "}
+        <button
+          type="button"
+          className={styles.link}
+          onClick={() => onChange([...defaults])}
+          disabled={kind === "default"}
+          title={t("compat.levelsResetHint")}
+        >
           {t("compat.levelsReset")}
-        </Button>
-      </div>
-      <p id={hintId} className={styles.hint}>
+        </button>
+      </p>
+    </section>
+  );
+}
+
+/** The badge of a provider list: the default set, an own list, or models that differ. */
+export const LEVELS_MARK = {
+  default: "compat.levelsDefault",
+  own: "compat.levelsOwn",
+  mixed: "compat.levelsMixed",
+} as const satisfies Record<LevelsKind, MessageKey>;
+
+/**
+ * The "?" beside the heading: the long explanation as a tooltip that opens on hover, on
+ * focus and on click (which pins it); Escape closes it without closing the drawer.
+ */
+function HelpTip({ id }: { id: string }) {
+  const t = useT();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const open = !dismissed && (hovered || focused || pinned);
+  return (
+    <span
+      className={styles.tip}
+      onMouseEnter={() => {
+        setHovered(true);
+        setDismissed(false);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        type="button"
+        className={styles.help}
+        aria-label={t("compat.levelsHelp")}
+        aria-describedby={id}
+        aria-expanded={open}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          setPinned(false);
+          setDismissed(false);
+        }}
+        onClick={() => {
+          // A click pins an open tip, or closes a pinned one.
+          setPinned(!(open && pinned));
+          setDismissed(open && pinned);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setPinned(false);
+            setDismissed(true);
+          }
+        }}
+      >
+        ?
+      </button>
+      <span id={id} role="tooltip" className={styles.tipBox} data-open={open || undefined}>
         {/* The hint marks values as `code`. */}
         {t("compat.levelsHint")
           .split("`")
           .map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : part))}
-      </p>
-    </fieldset>
+      </span>
+    </span>
   );
 }

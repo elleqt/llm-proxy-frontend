@@ -1,52 +1,157 @@
 .form {
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+}
+
+.heading {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sectionHead > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--dim);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Active in the accent colour; an error, a vendor's own word or a disabled account dimmed. */
+.dot {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.dot[data-status="active"] {
+  background: var(--accent);
+}
+
+.dot[data-status="disabled"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dim);
 }
 
 .actions {
   display: flex;
-  justify-content: flex-end;
   gap: 0.5rem;
 }
 
-.models {
+.keyField {
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
+}
+
+.label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.keyLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0;
-  padding: 0.75rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.6rem;
+  font-size: 0.875rem;
   border: 1px solid var(--line);
   border-radius: 6px;
 }
 
-.models legend {
-  padding: 0 0.25rem;
-  font-weight: 600;
+.lineActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.replace {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.replace > :first-child {
+  align-self: stretch;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dim);
 }
 
 .row {
   display: flex;
   align-items: flex-end;
-  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 20rem;
-  margin: 0;
-  padding: 0;
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.tableWrap {
+  max-height: 22rem;
   overflow-y: auto;
-  list-style: none;
 }
 
-.model {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th {
+  padding: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.table td {
+  padding: 0.3rem 0.25rem;
+  vertical-align: middle;
+}
+
+.table tbody + tbody tr:first-child td {
+  border-top: 1px solid var(--line);
+}
+
+.table .check {
+  width: 1.5rem;
+  text-align: center;
 }
 
 .mono {
@@ -59,6 +164,54 @@
 }
 
 .warning {
-  margin: 0;
   font-size: 0.85rem;
+}
+
+.disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.disclosure:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.arrow {
+  display: inline-block;
+  margin-right: 0.35rem;
+  transition: transform 0.15s;
+}
+
+.disclosure[aria-expanded="true"] .arrow {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow {
+    transition: none;
+  }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

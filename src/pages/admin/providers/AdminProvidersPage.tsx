@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
 import { QuotaMeters } from "../../../entities/provider/QuotaMeters";
 import { proxyLabel } from "../../../features/account-proxy/proxy";
-import { EditCompatProvider, NewCompatProvider } from "../../../features/compat-provider/CompatProvider";
+import { CompatDrawer } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../../shared/i18n";
@@ -117,7 +117,7 @@ export function AdminProvidersPage() {
       align: "end",
       cell: (a) => (
         <div className={styles.stackedActions}>
-          <EditCompatProvider account={a} />
+          <EditCompat account={a} />
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>
@@ -132,7 +132,7 @@ export function AdminProvidersPage() {
         <div className={styles.actions}>
           <AddProviderAccount onCompat={() => setAddingCompat(true)} />
         </div>
-        {addingCompat && <NewCompatProvider onClose={() => setAddingCompat(false)} />}
+        {addingCompat && <CompatDrawer onClose={() => setAddingCompat(false)} />}
       </div>
       {accounts.isPending ? (
         <Spinner label={t("app.loading")} />
@@ -145,6 +145,21 @@ export function AdminProvidersPage() {
           <Table label={t("page.admin.providers.title")} columns={columns} rows={accounts.data} rowKey={(a) => a.id} />
         </div>
       )}
+    </>
+  );
+}
+
+/** The "Edit" action of an OpenAI-compatible provider's row. */
+function EditCompat({ account }: { account: ProviderAccount }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  if (account.compat === undefined) return null;
+  return (
+    <>
+      <Button aria-label={fill(t("compat.editLabel"), { name: account.compat.name })} onClick={() => setOpen(true)}>
+        {t("compat.edit")}
+      </Button>
+      {open && <CompatDrawer account={account} onClose={() => setOpen(false)} />}
     </>
   );
 }
