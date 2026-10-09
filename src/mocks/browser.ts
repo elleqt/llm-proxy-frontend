@@ -242,9 +242,16 @@ function shownProxy(input: Schemas["AccountProxyInput"] | undefined): Schemas["A
 const DEFAULT_REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 /**
- * The models with each own reasoning list normalised (trimmed, lower-cased) like the backend, or null when a list is
- * refused: a value off `^[a-z][a-z0-9_-]{0,31}$`, a duplicate, more than 16 values, or an empty list. A model without
- * a list stays without the key.
+ * Every level upstream knows, in the backend's canonical order. A local copy of the form's list: the mock stands in
+ * for the server and depends on no feature code.
+ */
+const KNOWN_REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "auto"];
+
+/**
+ * The models with each own reasoning list normalised like the backend (trimmed, lower-cased, known levels first in
+ * their canonical order, own values after them as given), or null when a list is refused: a value off
+ * `^[a-z][a-z0-9_-]{0,31}$`, a duplicate, more than 16 values, or an empty list. A model without a list stays without
+ * the key.
  */
 function withReasoningLevels(models: Schemas["CompatModel"][]) {
   const out: Schemas["CompatModel"][] = [];
@@ -260,7 +267,9 @@ function withReasoningLevels(models: Schemas["CompatModel"][]) {
       new Set(levels).size === levels.length &&
       levels.every((l) => /^[a-z][a-z0-9_-]{0,31}$/.test(l));
     if (!valid) return null;
-    out.push({ ...model, reasoningLevels: levels });
+    const known = KNOWN_REASONING_LEVELS.filter((l) => levels.includes(l));
+    const own = levels.filter((l) => !KNOWN_REASONING_LEVELS.includes(l));
+    out.push({ ...model, reasoningLevels: [...known, ...own] });
   }
   return out;
 }
