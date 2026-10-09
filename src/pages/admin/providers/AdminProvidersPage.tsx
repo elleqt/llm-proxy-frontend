@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../../entities/provider/providers";
+import { AccountProxyAction } from "../../../features/account-proxy/AccountProxy";
+import { proxyLabel } from "../../../features/account-proxy/proxy";
 import { EditCompatProvider, NewCompatProvider } from "../../../features/compat-provider/CompatProvider";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
@@ -69,6 +71,14 @@ export function AdminProvidersPage() {
                 : a.status}
           </Badge>
         ),
+    },
+    {
+      id: "proxy",
+      header: t("proxy.column"),
+      sortValue: (a) => a.proxy.mode,
+      cell: (a) => (
+        <span className={a.proxy.mode === "inherit" ? styles.dim : undefined}>{proxyLabel(a.proxy, t)}</span>
+      ),
     },
     {
       id: "lastError",
@@ -145,6 +155,7 @@ export function AdminProvidersPage() {
       cell: (a) => (
         <div className={styles.stackedActions}>
           <EditCompatProvider account={a} />
+          <AccountProxyAction account={a} />
           <DisableToggle account={a} />
           <RemoveAccount account={a} returnFocus={listRef} />
         </div>
