@@ -13,9 +13,10 @@
   font-size: 0.9rem;
 }
 
+/* Even columns, so every line lines up; a narrow dialog gets fewer of them. Own values join the grid. */
 .options {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
   gap: 0.25rem 1rem;
 }
 
@@ -26,8 +27,10 @@
   gap: 0.5rem;
 }
 
+/* An own value may run to 32 characters: it wraps inside its column rather than spilling over the next. */
 .mono {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
 }
 
 .hint {
