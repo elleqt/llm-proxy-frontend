@@ -1,14 +1,16 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
+import { compatDefaultsQuery, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
 import { useErrorMessage, useT } from "../../shared/i18n";
 import { fill } from "../../shared/lib/template";
-import { Button, Checkbox, Modal, TextField } from "../../shared/ui";
+import { Button, Checkbox, Modal, Spinner, TextField } from "../../shared/ui";
 import { ProxyFields } from "../account-proxy/ProxyFields";
 import { proxyChanged, proxyDraft, proxyInput } from "../account-proxy/proxy";
 import styles from "./CompatProvider.module.css";
+import { levelsInput } from "./levels";
+import { ReasoningLevels } from "./ReasoningLevels";
 
 type CompatModel = components["schemas"]["CompatModel"];
 type CreateRequest = components["schemas"]["CompatProviderRequest"];
@@ -20,6 +22,8 @@ interface ModelRow {
   name: string;
   alias: string;
   picked: boolean;
+  /** The model's own reasoning levels, or `null` while it follows the default set. */
+  levels: string[] | null;
 }
 
 /** The OpenAI-compatible provider form for a new provider, opened from the "Add provider" wizard. */
@@ -53,11 +57,14 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
   const [clearKey, setClearKey] = useState(false);
   const [prefix, setPrefix] = useState(existing?.prefix ?? "");
   const [rows, setRows] = useState<ModelRow[]>(() =>
-    (existing?.models ?? []).map((m) => ({ name: m.name, alias: m.alias ?? "", picked: true })),
+    (existing?.models ?? []).map((m) => ({ name: m.name, alias: m.alias ?? "", picked: true, levels: m.reasoningLevels ?? null })),
   );
   const [conflicts, setConflicts] = useState<Record<string, string[]>>({});
   const [typed, setTyped] = useState("");
   const [pickError, setPickError] = useState(false);
+  const [levelsError, setLevelsError] = useState(false);
+  // Whether a model's list is its own is judged against the default set, so Save waits for it.
+  const defaults = useQuery(compatDefaultsQuery);
   const [proxy, setProxy] = useState(() => proxyDraft(account?.proxy));
   // A new provider always states its proxy; an edit sends one only when it asks for something else.
   const proxyEdited = account === undefined || proxyChanged(proxy, account.proxy);
@@ -120,7 +127,9 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
         // Rows already there keep their choice and alias; new ones wait to be picked.
         setRows((current) => [
           ...current,
-          ...found.models.filter((m) => !current.some((row) => row.name === m)).map((m) => ({ name: m, alias: "", picked: false })),
+          ...found.models
+            .filter((m) => !current.some((row) => row.name === m))
+            .map((m) => ({ name: m, alias: "", picked: false, levels: null })),
         ]);
         setConflicts(found.conflicts);
       },
@@ -133,21 +142,28 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
     setRows((current) =>
       current.some((row) => row.name === model)
         ? current.map((row) => (row.name === model ? { ...row, picked: true } : row))
-        : [...current, { name: model, alias: "", picked: true }],
+        : [...current, { name: model, alias: "", picked: true, levels: null }],
     );
     setTyped("");
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const models = rows
-      .filter((row) => row.picked)
-      .map((row): CompatModel => (row.alias.trim() === "" ? { name: row.name } : { name: row.name, alias: row.alias.trim() }));
-    if (models.length === 0) {
-      setPickError(true);
-      return;
-    }
-    setPickError(false);
+    const defaultLevels = defaults.data?.reasoningLevels;
+    if (defaultLevels === undefined) return;
+    const picked = rows.filter((row) => row.picked);
+    setPickError(picked.length === 0);
+    // An empty list would make upstream treat the model as non-thinking and strip the parameter.
+    const levelsMissing = picked.some((row) => row.levels?.length === 0);
+    setLevelsError(levelsMissing);
+    if (picked.length === 0 || levelsMissing) return;
+    const models = picked.map((row): CompatModel => {
+      const model: CompatModel = { name: row.name };
+      if (row.alias.trim() !== "") model.alias = row.alias.trim();
+      const reasoningLevels = levelsInput(row.levels, defaultLevels);
+      if (reasoningLevels !== undefined) model.reasoningLevels = reasoningLevels;
+      return model;
+    });
     save.mutate(models, { onSuccess: onClose });
   };
 
@@ -275,6 +291,18 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
                     {row.picked && others !== undefined && others.length > 0 && (
                       <p className={styles.warning}>{fill(t("compat.conflict"), { providers: others.join(", ") })}</p>
                     )}
+                    {row.picked && defaults.data !== undefined && (
+                      <ReasoningLevels
+                        model={row.name}
+                        levels={row.levels}
+                        defaults={defaults.data.reasoningLevels}
+                        onChange={(levels) => {
+                          setLevelsError(false);
+                          setRows((current) => current.map((r) => (r.name === row.name ? { ...r, levels } : r)));
+                        }}
+                      />
+                    )}
+                    {row.picked && defaults.isPending && <Spinner label={t("compat.levelsLoading")} />}
                   </li>
                 );
               })}
@@ -300,12 +328,20 @@ function CompatProviderForm({ account, onClose }: { account?: ProviderAccount; o
             </Button>
           </div>
           {pickError && <p role="alert">{t("compat.pickModels")}</p>}
+          {levelsError && <p role="alert">{t("compat.pickLevels")}</p>}
         </fieldset>
 
+        {/* Once, for the whole form: without the default set no model's levels can be judged, so nothing saves. */}
+        {defaults.isError && <p role="alert">{errorMessage(defaults.error)}</p>}
         {save.isError && !fieldShown && <p role="alert">{errorMessage(save.error)}</p>}
         <div className={styles.actions}>
           <Button onClick={onClose}>{t("ui.cancel")}</Button>
-          <Button type="submit" variant="primary" busy={save.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            busy={save.isPending || defaults.isPending}
+            disabled={defaults.isError}
+          >
             {existing === undefined ? t("compat.save") : t("compat.saveEdit")}
           </Button>
         </div>

@@ -6,7 +6,7 @@ import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { cached } from "../../../test/cache";
 import { renderApp } from "../../../test/render";
-import { fixtures, http, server, type Schemas } from "../../../test/server";
+import { errorResponse, fixtures, http, server, type Schemas } from "../../../test/server";
 
 const AUTH_URL = "https://auth.example.com/authorize?state=example";
 const CALLBACK = "http://localhost:54545/callback?code=example&state=example";
@@ -639,5 +639,213 @@ describe("OpenAI-compatible providers", () => {
     await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.provider_auth_failed"]);
+  });
+
+  describe("reasoning levels", () => {
+    const DEFAULTS = fixtures.compatDefaults().reasoningLevels;
+    // The hint's `code` marks are rendered as code, so its accessible text has none.
+    const HINT = en["compat.levelsHint"].replaceAll("`", "");
+
+    /** The reasoning levels block of `model` in `dialog`. */
+    const levels = (dialog: HTMLElement, model: string) =>
+      within(within(dialog).getByRole("group", { name: fill(en["compat.levelsFor"], { model }) }));
+
+    /** Opens the edit form of the one stored provider; updates land in `updates`. */
+    async function editForm(account: Schemas["ProviderAccount"]) {
+      providers([account]);
+      const updates: Schemas["CompatProviderUpdate"][] = [];
+      server.use(
+        http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+          updates.push(await request.json());
+          return response(200).json(account);
+        }),
+      );
+      const user = userEvent.setup();
+      renderApp("/admin/providers");
+      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+      await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
+      return { user, dialog, updates };
+    }
+
+    it("start from the default set under the hint, and a new provider's models are sent without them", async () => {
+      providers([]);
+      let created: Schemas["CompatProviderRequest"] | undefined;
+      server.use(
+        http.post("/api/admin/providers/compat", async ({ request, response }) => {
+          created = await request.json();
+          return response(201).json(compatAccount({ models: created.models }));
+        }),
+      );
+      const user = userEvent.setup();
+      renderApp("/admin/providers");
+
+      await openCompatForm(user);
+      const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
+      await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
+      await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
+      await user.type(within(dialog).getByLabelText(en["compat.addModel"]), "model-a");
+      await user.click(within(dialog).getByRole("button", { name: en["compat.addModelButton"] }));
+
+      const group = await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
+      expect(group).toHaveAccessibleDescription(HINT);
+      const block = levels(dialog, "model-a");
+      for (const level of DEFAULTS) expect(block.getByRole("checkbox", { name: level })).toBeChecked();
+      // Ollama refuses `auto`: offered, but not in the default set.
+      expect(block.getByRole("checkbox", { name: "auto" })).not.toBeChecked();
+      expect(block.getByText(en["compat.levelsDefault"])).toBeInTheDocument();
+      expect(block.getByRole("button", { name: en["compat.levelsReset"] })).toBeDisabled();
+
+      await user.click(within(dialog).getByRole("button", { name: en["compat.save"] }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(created?.models).toEqual([{ name: "model-a" }]);
+    });
+
+    it("become an own list once a level is unchecked", async () => {
+      const { user, dialog, updates } = await editForm(compatAccount());
+      const block = levels(dialog, "model-a");
+
+      await user.click(block.getByRole("checkbox", { name: "max" }));
+      expect(block.getByText(en["compat.levelsOwn"])).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a", reasoningLevels: DEFAULTS.filter((l) => l !== "max") }]);
+    });
+
+    it("go back to the default set on Reset, and are then not sent", async () => {
+      const { user, dialog, updates } = await editForm(compatAccount());
+      const block = levels(dialog, "model-a");
+
+      await user.click(block.getByRole("checkbox", { name: "max" }));
+      await user.click(block.getByRole("button", { name: en["compat.levelsReset"] }));
+      expect(block.getByRole("checkbox", { name: "max" })).toBeChecked();
+      expect(block.getByText(en["compat.levelsDefault"])).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a" }]);
+    });
+
+    it("take an own value, checked and lower-cased, and refuse a malformed one in place", async () => {
+      const { user, dialog, updates } = await editForm(compatAccount());
+      const block = levels(dialog, "model-a");
+      const own = block.getByLabelText(en["compat.levelsAdd"]);
+
+      await user.type(own, "9x");
+      await user.click(block.getByRole("button", { name: en["compat.levelsAddButton"] }));
+      expect(own).toHaveAccessibleDescription(en["compat.levelsInvalid"]);
+      expect(block.queryByRole("checkbox", { name: "9x" })).not.toBeInTheDocument();
+
+      await user.clear(own);
+      await user.type(own, " Ultra {Enter}");
+      expect(block.getByRole("checkbox", { name: "ultra" })).toBeChecked();
+      expect(own).toHaveValue("");
+      expect(own).not.toHaveAccessibleDescription(en["compat.levelsInvalid"]);
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a", reasoningLevels: [...DEFAULTS, "ultra"] }]);
+    });
+
+    it("show a model's own list as such, and send it back unchanged", async () => {
+      const { user, dialog, updates } = await editForm(
+        compatAccount({ models: [{ name: "model-a", reasoningLevels: ["none", "high", "ultra"] }] }),
+      );
+      const block = levels(dialog, "model-a");
+
+      for (const level of ["none", "high", "ultra"]) expect(block.getByRole("checkbox", { name: level })).toBeChecked();
+      expect(block.getByRole("checkbox", { name: "max" })).not.toBeChecked();
+      expect(block.getByText(en["compat.levelsOwn"])).toBeInTheDocument();
+      expect(block.getByRole("button", { name: en["compat.levelsReset"] })).toBeEnabled();
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a", reasoningLevels: ["none", "high", "ultra"] }]);
+    });
+
+    it("refuse to save with none checked", async () => {
+      const { user, dialog, updates } = await editForm(
+        compatAccount({ models: [{ name: "model-a", reasoningLevels: ["none", "high"] }] }),
+      );
+      const block = levels(dialog, "model-a");
+
+      await user.click(block.getByRole("checkbox", { name: "none" }));
+      await user.click(block.getByRole("checkbox", { name: "high" }));
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      expect(within(dialog).getByRole("alert")).toHaveTextContent(en["compat.pickLevels"]);
+      expect(updates).toEqual([]);
+
+      // Checking a level again takes the refusal away.
+      await user.click(block.getByRole("checkbox", { name: "high" }));
+      expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("hold Save while the default set loads", async () => {
+      let release: () => void = () => {};
+      const loaded = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.get("/api/admin/providers/compat/defaults", async ({ response }) => {
+          await loaded;
+          return response(200).json(fixtures.compatDefaults());
+        }),
+      );
+      providers([compatAccount()]);
+      const updates: Schemas["CompatProviderUpdate"][] = [];
+      server.use(
+        http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+          updates.push(await request.json());
+          return response(200).json(compatAccount());
+        }),
+      );
+      const user = userEvent.setup();
+      renderApp("/admin/providers");
+      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+
+      expect(within(dialog).getByText(en["compat.levelsLoading"]).closest("[role=status]")).not.toBeNull();
+      const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
+      expect(save).toHaveAttribute("aria-busy", "true");
+      await user.click(save);
+      expect(updates).toEqual([]);
+
+      act(() => release());
+      await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
+      await user.click(save);
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a" }]);
+    });
+
+    it("say once that the default set failed to load, and keep Save from sending", async () => {
+      server.use(
+        http.get("/api/admin/providers/compat/defaults", ({ response }) =>
+          response.untyped(errorResponse(500, { code: "internal", message: "boom" })),
+        ),
+      );
+      providers([compatAccount({ models: [{ name: "model-a" }, { name: "model-b" }] })]);
+      const updates: Schemas["CompatProviderUpdate"][] = [];
+      server.use(
+        http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
+          updates.push(await request.json());
+          return response(200).json(compatAccount());
+        }),
+      );
+      const user = userEvent.setup();
+      renderApp("/admin/providers");
+      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
+      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.internal"]);
+      // Two picked models, one alert: the failure belongs to the form, not to each row.
+      expect(within(dialog).getAllByRole("alert")).toHaveLength(1);
+      const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
+      expect(save).toBeDisabled();
+      await user.click(save);
+      expect(updates).toEqual([]);
+    });
   });
 });

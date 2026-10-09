@@ -487,6 +487,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/providers/compat/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The defaults an OpenAI-compatible provider's form starts from. */
+        get: operations["getCompatDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/providers/compat/discover": {
         parameters: {
             query?: never;
@@ -914,6 +931,12 @@ export interface components {
             name: string;
             /** @description The name clients request it by; absent serves it as `name`. */
             alias?: string;
+            /** @description The `reasoning_effort` values passed to the vendor unchanged. A standard level off the list becomes the nearest listed one, so the vendor does not reject it; an unknown value off the list is refused. Known levels are kept in canonical order. Absent: the default set (`CompatDefaults`). Responses carry it only for a model's own list. */
+            reasoningLevels?: string[];
+        };
+        CompatDefaults: {
+            /** @description The reasoning levels a model without its own list passes unchanged. */
+            reasoningLevels: string[];
         };
         CompatProviderDetails: {
             name: string;
@@ -2236,6 +2259,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCompatDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The default set of reasoning levels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompatDefaults"];
                 };
             };
         };
