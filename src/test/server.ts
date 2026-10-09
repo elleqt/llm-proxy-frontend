@@ -11,8 +11,9 @@ export const http = createOpenApiHttp<paths>({ baseUrl: location.origin });
  * Tests register handlers per case with `server.use(...)`; unmatched requests
  * fail. The standing answers: the deployment's config (costs hidden from users),
  * the signed-in user may use some models and has no spend limits, which every
- * cabinet and connect screen asks, and the administrator's config. A test about
- * any of them overrides it.
+ * cabinet and connect screen asks, the administrator's config, and the default
+ * reasoning levels every OpenAI-compatible form asks. A test about any of them
+ * overrides it.
  */
 export const server = setupServer(
   http.get("/api/config", ({ response }) => response(200).json(fixtures.config())),
@@ -21,6 +22,7 @@ export const server = setupServer(
   ),
   http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.myLimits())),
   http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible: false })),
+  http.get("/api/admin/providers/compat/defaults", ({ response }) => response(200).json(fixtures.compatDefaults())),
 );
 
 /**
@@ -100,6 +102,10 @@ export const fixtures = {
     lastRefreshedAt: "2026-09-23T07:00:00Z",
     quota: [{ window: "5h", usedRatio: 0.4, resetAt: "2026-09-23T12:00:00Z", observedAt: "2026-09-23T09:00:00Z" }],
     ...overrides,
+  }),
+  /** The server's default reasoning levels: every level upstream knows except `auto`. */
+  compatDefaults: (): Schemas["CompatDefaults"] => ({
+    reasoningLevels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
   }),
   catalog: (): Schemas["Catalog"] => ({
     providers: [

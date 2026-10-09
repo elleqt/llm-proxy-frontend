@@ -13,6 +13,17 @@ export const providerAccountsQuery = queryOptions({
   queryFn: ({ signal }) => unwrap(client.GET("/api/admin/providers", { signal })),
 });
 
+/**
+ * The reasoning levels a compat model without its own list passes unchanged: a server
+ * constant, so it is fetched once. Its key sits outside ["admin", "providers"], which a
+ * saved provider invalidates.
+ */
+export const compatDefaultsQuery = queryOptions({
+  queryKey: ["admin", "compat-defaults"],
+  queryFn: ({ signal }) => unwrap(client.GET("/api/admin/providers/compat/defaults", { signal })),
+  staleTime: Infinity,
+});
+
 /** How the account is called on screen and in confirmations: label, else email, else id. */
 export function accountName(account: Pick<ProviderAccount, "id" | "label" | "email">): string {
   return account.label || account.email || account.id;
