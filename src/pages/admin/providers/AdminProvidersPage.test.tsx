@@ -249,6 +249,88 @@ describe("account table", () => {
     await screen.findByRole("button", { name: fill(en["providers.disableLabel"], { name: "ops" }) });
     expect(sent).toEqual([true, false]);
   });
+
+  it("shows each account's proxy, its address without credentials", async () => {
+    providers([
+      fixtures.providerAccount({ id: "a", label: "a" }),
+      fixtures.providerAccount({ id: "b", label: "b", proxy: { mode: "direct" } }),
+      fixtures.providerAccount({ id: "c", label: "c", proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true } }),
+    ]);
+    renderApp("/admin/providers");
+
+    expect(await screen.findByRole("cell", { name: en["proxy.inherit"] })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: en["proxy.direct"] })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: `http://proxy.example.com:3128 · ${en["proxy.withCredentials"]}` })).toBeInTheDocument();
+  });
+
+  it("sets an own proxy, keeps the typed URL in no cache, and shows a refused URL on its field", async () => {
+    let account = fixtures.providerAccount({ label: "ops" });
+    providers([]);
+    const sent: Schemas["AccountProxyInput"][] = [];
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json([account])),
+      http.patch("/api/admin/providers/{accountId}", async ({ request, response }) => {
+        const body = await request.json();
+        if (body.proxy !== undefined) sent.push(body.proxy);
+        if (body.proxy?.url === "ftp://bad.example.com") {
+          return response(422).json({ code: "invalid_input", message: "", field: "proxy.url" });
+        }
+        account = { ...account, proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true } };
+        return response(200).json(account);
+      }),
+    );
+    const user = userEvent.setup();
+    const { queryClient } = renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["proxy.editLabel"], { name: "ops" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["proxy.title"], { name: "ops" }) });
+    expect(within(dialog).getByRole("button", { name: en["proxy.save"] })).toBeDisabled();
+    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "custom");
+    await user.type(within(dialog).getByLabelText(en["proxy.url"]), "ftp://bad.example.com");
+    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+    expect(await within(dialog).findByText(en["error.invalid_input"])).toBeInTheDocument();
+
+    const url = within(dialog).getByLabelText(en["proxy.url"]);
+    await user.clear(url);
+    await user.type(url, "http://ops:proxy-pass@proxy.example.com:3128");
+    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(sent).toEqual([
+      { mode: "custom", url: "ftp://bad.example.com" },
+      { mode: "custom", url: "http://ops:proxy-pass@proxy.example.com:3128" },
+    ]);
+    expect(await screen.findByRole("cell", { name: `http://proxy.example.com:3128 · ${en["proxy.withCredentials"]}` })).toBeInTheDocument();
+    expect(cached(queryClient)).not.toContain("proxy-pass");
+  });
+
+  it("keeps a stored own proxy until a new URL is typed, and switches to direct without one", async () => {
+    let account = fixtures.providerAccount({ label: "ops", proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true } });
+    providers([]);
+    const sent: Schemas["AccountProxyInput"][] = [];
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json([account])),
+      http.patch("/api/admin/providers/{accountId}", async ({ request, response }) => {
+        const { proxy } = await request.json();
+        if (proxy !== undefined) sent.push(proxy);
+        account = { ...account, proxy: { mode: "direct" } };
+        return response(200).json(account);
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["proxy.editLabel"], { name: "ops" }) }));
+    const dialog = screen.getByRole("dialog", { name: fill(en["proxy.title"], { name: "ops" }) });
+    expect(within(dialog).getByLabelText(en["proxy.url"])).toHaveAccessibleDescription(
+      fill(en["proxy.urlKeepHint"], { url: `http://proxy.example.com:3128 (${en["proxy.withCredentials"]})` }),
+    );
+    expect(within(dialog).getByRole("button", { name: en["proxy.save"] })).toBeDisabled();
+    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "direct");
+    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+
+    await waitFor(() => expect(sent).toEqual([{ mode: "direct" }]));
+  });
 });
 
 const COMPAT_KEY = "sk-compat-example-key";
