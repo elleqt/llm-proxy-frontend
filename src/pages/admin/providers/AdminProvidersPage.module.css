@@ -180,7 +180,10 @@
   top: calc(100% + 0.3rem);
   left: 0;
   z-index: 3;
+  /* As wide as its longest name, so a name keeps its line; only past the cap does it wrap. */
+  width: max-content;
   min-width: 12rem;
+  max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.5rem;
   background: var(--panel);
   border: 1px solid var(--line);
