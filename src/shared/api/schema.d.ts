@@ -931,7 +931,7 @@ export interface components {
             name: string;
             /** @description The name clients request it by; absent serves it as `name`. */
             alias?: string;
-            /** @description The `reasoning_effort` values passed to the vendor unchanged; a value off the list becomes the nearest listed one. Absent: the default set (`CompatDefaults`). Responses carry it only for a model's own list. */
+            /** @description The `reasoning_effort` values passed to the vendor unchanged. A standard level off the list becomes the nearest listed one, so the vendor does not reject it; an unknown value off the list is refused. Known levels are kept in canonical order. Absent: the default set (`CompatDefaults`). Responses carry it only for a model's own list. */
             reasoningLevels?: string[];
         };
         CompatDefaults: {

@@ -440,7 +440,7 @@ export const en = {
   "compat.levels": "Reasoning levels",
   "compat.levelsFor": "Reasoning levels for {model}",
   "compat.levelsHint":
-    "The `reasoning_effort` values the gateway passes to this model unchanged. The client picks the level per request: `none` turns reasoning off, `high` asks for longer thinking. A value not on the list is replaced with the nearest checked one, so the vendor does not reject it. The default set suits most vendors (Ollama, DeepSeek). Uncheck a level only if the vendor refuses it; add your own if the vendor knows a level that is not listed.",
+    "The `reasoning_effort` values the gateway passes to this model unchanged. The client picks the level per request: `none` turns reasoning off, `high` asks for longer thinking. A standard level not on the list is replaced with the nearest checked one, so the vendor does not reject it; an unknown value not on the list is refused. The default set suits most vendors (Ollama, DeepSeek). Uncheck a level only if the vendor refuses it; add your own if the vendor knows a level that is not listed.",
   "compat.levelsDefault": "default",
   "compat.levelsOwn": "own list",
   "compat.levelsReset": "Reset",
