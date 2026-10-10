@@ -5,7 +5,7 @@ import { QuotaMeters } from "../../../entities/provider/QuotaMeters";
 import { accountStatus, StatusDot } from "../../../entities/provider/StatusDot";
 import { AccountDrawer } from "../../../features/account-proxy/AccountDrawer";
 import { ProxyCell } from "../../../features/account-proxy/ProxyCell";
-import { CompatDrawer } from "../../../features/compat-provider/CompatProvider";
+import { CompatDrawer } from "../../../features/compat-provider/CompatDrawer";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { client, unwrap } from "../../../shared/api/client";
 import type { components } from "../../../shared/api/schema";
@@ -23,8 +23,9 @@ export function AdminProvidersPage() {
   const t = useT();
   const errorMessage = useErrorMessage();
   const accounts = useQuery(providerAccountsQuery);
-  // Where focus goes when the row that held it is removed.
-  const listRef = useRef<HTMLDivElement>(null);
+  // Where focus goes when the row that held it is removed: the heading, which outlives
+  // the list (removing the last account replaces it with the empty state).
+  const headingRef = useRef<HTMLHeadingElement>(null);
   // "resets in 4 h 12 min" counts down while the page is open.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -39,7 +40,9 @@ export function AdminProvidersPage() {
   return (
     <div className={styles.page}>
       <div className={admin.titleRow}>
-        <h1>{t("page.admin.providers.title")}</h1>
+        <h1 ref={headingRef} tabIndex={-1} className={styles.heading}>
+          {t("page.admin.providers.title")}
+        </h1>
         <div className={admin.actions}>
           <AddProviderAccount onCompat={() => setAddingCompat(true)} />
         </div>
@@ -52,14 +55,14 @@ export function AdminProvidersPage() {
       ) : accounts.data.length === 0 ? (
         <EmptyState title={t("providers.empty")} body={t("providers.emptyBody")} />
       ) : (
-        <div ref={listRef} tabIndex={-1} className={styles.groups}>
+        <div className={styles.groups}>
           {subscriptions.length > 0 && (
             <Group
               title={t("providers.subscriptions")}
               columns={[t("providers.account"), t("providers.quota"), t("proxy.column")]}
               accounts={subscriptions}
               now={now}
-              listRef={listRef}
+              returnFocus={headingRef}
             />
           )}
           {compat.length > 0 && (
@@ -68,7 +71,7 @@ export function AdminProvidersPage() {
               columns={[t("providers.provider"), t("compat.models"), t("proxy.column")]}
               accounts={compat}
               now={now}
-              listRef={listRef}
+              returnFocus={headingRef}
             />
           )}
         </div>
@@ -83,13 +86,13 @@ function Group({
   columns,
   accounts,
   now,
-  listRef,
+  returnFocus,
 }: {
   title: string;
   columns: string[];
   accounts: ProviderAccount[];
   now: number;
-  listRef: RefObject<HTMLElement | null>;
+  returnFocus: RefObject<HTMLElement | null>;
 }) {
   const headingId = useId();
   return (
@@ -107,7 +110,7 @@ function Group({
       {/* `role` restores the list semantics `list-style: none` takes away in some browsers. */}
       <ul role="list" className={styles.rows}>
         {accounts.map((account) => (
-          <AccountRow key={account.id} account={account} now={now} listRef={listRef} />
+          <AccountRow key={account.id} account={account} now={now} returnFocus={returnFocus} />
         ))}
       </ul>
     </section>
@@ -118,18 +121,18 @@ function Group({
 function AccountRow({
   account,
   now,
-  listRef,
+  returnFocus,
 }: {
   account: ProviderAccount;
   now: number;
-  listRef: RefObject<HTMLElement | null>;
+  returnFocus: RefObject<HTMLElement | null>;
 }) {
   const t = useT();
   const id = useId();
   const [editing, setEditing] = useState(false);
   const name = accountName(account);
   const compat = account.compat;
-  const remove = <RemoveAccount account={account} returnFocus={listRef} />;
+  const remove = <RemoveAccount account={account} returnFocus={returnFocus} />;
   return (
     <li className={styles.row} data-disabled={account.disabled || undefined} aria-labelledby={`${id}-name ${id}-sub`}>
       <div className={styles.who}>
@@ -343,7 +346,9 @@ function RemoveAccount({
       unwrap(client.DELETE("/api/admin/providers/{accountId}", { params: { path: { accountId: account.id } } })),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey });
-      setOpen(false);
+      // The row leaves with the account and takes this dialog with it; focus then goes
+      // to `returnFocus`. Closing first would hand focus to the trash button about to go.
+      if (queryClient.getQueryData(providerAccountsQuery.queryKey)?.some((a) => a.id === account.id)) setOpen(false);
     },
   });
   return (

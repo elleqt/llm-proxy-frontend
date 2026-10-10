@@ -2,7 +2,7 @@ import type { components } from "../../shared/api/schema";
 
 export type AccountProxy = components["schemas"]["AccountProxy"];
 export type AccountProxyInput = components["schemas"]["AccountProxyInput"];
-export type ProxyMode = AccountProxyInput["mode"];
+type ProxyMode = AccountProxyInput["mode"];
 
 /** The proxy part of a form: the chosen mode and a URL typed for an own proxy. */
 export interface ProxyDraft {
@@ -20,6 +20,14 @@ export function proxyDraft(stored: AccountProxy | undefined): ProxyDraft {
 /** Whether the draft asks for anything the stored proxy is not. An empty URL keeps a stored own proxy. */
 export function proxyChanged(draft: ProxyDraft, stored: AccountProxy | undefined): boolean {
   return draft.mode !== (stored?.mode ?? "inherit") || draft.url.trim() !== "";
+}
+
+/**
+ * Whether a drawer's proxy part holds unsaved work: a changed draft, or text
+ * typed while Replace is open (even blank, the field is not what was stored).
+ */
+export function proxyDirty(draft: ProxyDraft & { replacing: boolean }, stored: AccountProxy | undefined): boolean {
+  return proxyChanged(draft, stored) || (draft.replacing && draft.url !== "");
 }
 
 /** The request body for a draft: only an own proxy carries a URL. */

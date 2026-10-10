@@ -1,10 +1,8 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "../../app/queryClient";
-import { I18nProvider } from "../../shared/i18n";
 import { en } from "../../shared/i18n/en";
+import { renderWithClient } from "../../test/render";
 import { fixtures, http, server } from "../../test/server";
 import { AccountDrawer } from "./AccountDrawer";
 
@@ -14,13 +12,7 @@ function drawer() {
   const account = fixtures.providerAccount({
     proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true },
   });
-  render(
-    <QueryClientProvider client={createQueryClient(() => undefined)}>
-      <I18nProvider>
-        <AccountDrawer account={account} onClose={onClose} removeAction={null} now={Date.parse("2026-09-23T10:00:00Z")} />
-      </I18nProvider>
-    </QueryClientProvider>,
-  );
+  renderWithClient(<AccountDrawer account={account} onClose={onClose} removeAction={null} now={Date.parse("2026-09-23T10:00:00Z")} />);
   return { onClose, account, user: userEvent.setup() };
 }
 

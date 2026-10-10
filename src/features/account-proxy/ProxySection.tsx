@@ -68,13 +68,14 @@ export function ProxySection({
                 {stored.hasCredentials === true && <LockIcon label={t("proxy.withCredentials")} />}
               </>
             ) : (
-              // The list's line: one line, its tail faded when it does not fit, in full on hover or focus.
+              // The list's tag and host, never faded here: the drawer always shows the full value.
               <span className={styles.line}>
                 <OwnProxyLine
                   url={stored.url}
                   scheme={parts.scheme}
                   host={parts.host}
                   hasCredentials={stored.hasCredentials === true}
+                  wrap
                 />
               </span>
             )}

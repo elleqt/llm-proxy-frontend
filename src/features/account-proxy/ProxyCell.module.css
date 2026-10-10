@@ -72,3 +72,29 @@
 .line[data-overflow]:focus-visible .scheme {
   display: inline;
 }
+
+/* The drawer's full value: inline text that breaks at the spaces first, inside the host only when it must. */
+.cell[data-wrap] {
+  height: auto;
+  min-width: 0;
+}
+
+.cell[data-wrap] .line {
+  display: block;
+  white-space: normal;
+}
+
+.cell[data-wrap] .tag {
+  display: inline-block;
+}
+
+.cell[data-wrap] .host {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cell[data-wrap] svg {
+  display: inline-block;
+  vertical-align: -0.15em;
+}

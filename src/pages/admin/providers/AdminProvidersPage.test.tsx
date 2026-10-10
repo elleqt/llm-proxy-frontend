@@ -307,7 +307,7 @@ describe("account list", () => {
     await waitFor(() => expect(removed).toEqual(["claude-ops@example.com"]));
   });
 
-  it("removes from inside the drawer: the confirmation opens on top, and focus returns to the list", async () => {
+  it("removes from inside the drawer: the confirmation opens on top, and focus returns to the page heading", async () => {
     let accounts = [
       fixtures.providerAccount({ label: "ops" }),
       fixtures.providerAccount({ id: "claude-spare@example.com", label: "spare", email: null }),
@@ -340,7 +340,31 @@ describe("account list", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(removed).toEqual(["claude-ops@example.com"]);
     expect(screen.queryByRole("listitem", { name: "claude ops" })).not.toBeInTheDocument();
-    expect(document.activeElement).toContainElement(screen.getByRole("listitem", { name: "claude spare" }));
+    expect(screen.getByRole("listitem", { name: "claude spare" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: en["page.admin.providers.title"] })).toHaveFocus();
+  });
+
+  it("keeps focus on the page when the last account is removed", async () => {
+    let accounts = [fixtures.providerAccount({ label: "ops" })];
+    providers([]);
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json(accounts)),
+      http.delete("/api/admin/providers/{accountId}", ({ params }) => {
+        accounts = accounts.filter((a) => a.id !== params.accountId);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["providers.removeLabel"], { name: "ops" }) }));
+    const confirm = screen.getByRole("dialog", { name: fill(en["providers.removeTitle"], { name: "ops" }) });
+    await user.type(within(confirm).getByLabelText(fill(en["admin.typeToConfirm"], { name: "ops" })), "ops");
+    await user.click(within(confirm).getByRole("button", { name: en["providers.removeConfirm"] }));
+
+    expect(await screen.findByText(en["providers.empty"])).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: en["page.admin.providers.title"] })).toHaveFocus();
   });
 
   it("disables after a confirmation naming the account, and enables at once", async () => {

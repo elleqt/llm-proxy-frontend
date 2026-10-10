@@ -57,7 +57,7 @@
   min-width: 0;
 }
 
-/* The stored address takes the room left of Replace and stays on one line (the list's fade). */
+/* The stored address takes the room left of Replace and wraps in it rather than fade. */
 .line {
   flex: 1;
   min-width: 0;

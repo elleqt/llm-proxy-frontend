@@ -6,7 +6,7 @@ import { accountStatus, refreshedAt, StatusDot } from "../../entities/provider/S
 import { ApiError, client, unwrap } from "../../shared/api/client";
 import { useErrorMessage, useLang, useT } from "../../shared/i18n";
 import { Button, Modal, useDiscardGuard } from "../../shared/ui";
-import { proxyChanged, proxyInput } from "./proxy";
+import { proxyChanged, proxyDirty, proxyInput } from "./proxy";
 import { ProxySection, sectionDraft } from "./ProxySection";
 import styles from "./AccountDrawer.module.css";
 
@@ -32,8 +32,7 @@ export function AccountDrawer({
   const formId = useId();
   const [draft, setDraft] = useState(() => sectionDraft(account.proxy));
   const changed = proxyChanged(draft, account.proxy);
-  // A URL typed while Replace is open is unsaved work even when the mode is unchanged.
-  const guard = useDiscardGuard(changed || (draft.replacing && draft.url !== ""), onClose);
+  const guard = useDiscardGuard(proxyDirty(draft, account.proxy), onClose);
   // gcTime 0: a typed URL may carry the proxy's password; it leaves no cache behind.
   const save = useMutation({
     mutationFn: () =>

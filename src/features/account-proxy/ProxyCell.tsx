@@ -15,20 +15,24 @@ export function ProxyCell({ proxy }: { proxy: AccountProxy }) {
 }
 
 /**
- * A stored own proxy as one line that never wraps, in the list and in the drawer.
- * Fades the host's tail when it overflows its room; then the line is focusable
- * and, on hover or focus, rises over its neighbours in full.
+ * A stored own proxy as its scheme tag and host. In the list, one line that never wraps:
+ * it fades the host's tail when it overflows its room; then the line is focusable and,
+ * on hover or focus, rises over its neighbours in full. `wrap` (the drawer, which always
+ * shows the full value): the host moves under the tag, and breaks inside only when it
+ * still does not fit.
  */
 export function OwnProxyLine({
   url,
   scheme,
   host,
   hasCredentials,
+  wrap = false,
 }: {
   url: string;
   scheme: string;
   host: string;
   hasCredentials: boolean;
+  wrap?: boolean;
 }) {
   const t = useT();
   const cellRef = useRef<HTMLSpanElement>(null);
@@ -39,7 +43,7 @@ export function OwnProxyLine({
     const cell = cellRef.current;
     const line = lineRef.current;
     const hostText = hostRef.current;
-    if (cell === null || line === null || hostText === null) return;
+    if (wrap || cell === null || line === null || hostText === null) return;
     // The line's natural width (tag, the host unclipped, lock) against the cell's room.
     // The cell keeps its size while the line is raised, so this answer does not flip on hover.
     const check = () =>
@@ -50,10 +54,10 @@ export function OwnProxyLine({
     const observer = new ResizeObserver(check);
     observer.observe(cell);
     return () => observer.disconnect();
-  }, [url]);
+  }, [url, wrap]);
   const full = hasCredentials ? `${url}, ${t("proxy.withCredentials")}` : url;
   return (
-    <span ref={cellRef} className={styles.cell}>
+    <span ref={cellRef} className={styles.cell} data-wrap={wrap || undefined}>
       <span
         ref={lineRef}
         className={styles.line}
@@ -63,10 +67,13 @@ export function OwnProxyLine({
         aria-label={overflow ? full : undefined}
       >
         <span className={styles.tag}>{scheme}</span>
+        {/* Wrapped, the line breaks after the tag first; the lock stays with the host's end. */}
+        {wrap && " "}
         <span ref={hostRef} className={styles.host}>
           <span className={styles.scheme}>{scheme.toLowerCase()}://</span>
           {host}
         </span>
+        {wrap && hasCredentials && "\u00a0"}
         {hasCredentials && <LockIcon label={t("proxy.withCredentials")} />}
       </span>
     </span>

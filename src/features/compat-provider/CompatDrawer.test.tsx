@@ -1,12 +1,10 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "../../app/queryClient";
-import { I18nProvider } from "../../shared/i18n";
 import { en } from "../../shared/i18n/en";
+import { renderWithClient } from "../../test/render";
 import { fixtures, http, server, type Schemas } from "../../test/server";
-import { CompatDrawer } from "./CompatProvider";
+import { CompatDrawer } from "./CompatDrawer";
 
 type Compat = NonNullable<Schemas["ProviderAccount"]["compat"]>;
 
@@ -29,13 +27,7 @@ function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["pro
     }),
   );
   const onClose = vi.fn();
-  render(
-    <QueryClientProvider client={createQueryClient(() => undefined)}>
-      <I18nProvider>
-        <CompatDrawer account={account} onClose={onClose} removeAction={null} />
-      </I18nProvider>
-    </QueryClientProvider>,
-  );
+  renderWithClient(<CompatDrawer account={account} onClose={onClose} removeAction={null} />);
   return { sent, onClose, user: userEvent.setup() };
 }
 
@@ -226,6 +218,20 @@ describe("CompatDrawer unsaved changes", () => {
     await user.click(screen.getByRole("button", { name: en["ui.keepEditing"] }));
     expect(screen.queryByRole("dialog", { name: en["ui.discardTitle"] })).toBeNull();
     expect(within(dialog()).getByLabelText(en["compat.apiKey"])).toHaveValue("sk-compat-example-key");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("asks before dropping a proxy URL typed in Replace for a stored own proxy", async () => {
+    const { user, onClose } = drawer([{ name: "model-a" }], { mode: "custom", url: "http://proxy.example.com:3128" });
+    const proxy = within(dialog()).getByRole("region", { name: en["proxy.column"] });
+    expect(within(proxy).getByRole("radio", { name: en["proxy.ownSegment"] })).toBeChecked();
+    expect(save()).toBeDisabled();
+
+    await user.click(within(proxy).getByRole("button", { name: en["proxy.replace"] }));
+    await user.type(within(proxy).getByLabelText(en["proxy.url"]), "http://other.example.com:8080");
+    await user.keyboard("{Escape}");
+
+    expect(await screen.findByRole("dialog", { name: en["ui.discardTitle"] })).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 });

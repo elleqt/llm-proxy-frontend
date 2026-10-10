@@ -4,13 +4,16 @@
   margin-inline: auto;
 }
 
+/* The rows switch to cards by the room the list has, not the viewport's (the admin shell takes some). */
 .groups {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-.groups:focus {
+/* Focus lands here only as a fallback, after a removal; it is not a control. */
+.heading:focus {
   outline: none;
 }
 
@@ -206,7 +209,11 @@
 }
 
 /* The existing table card breakpoint: each row becomes a card, zones stacked, actions top-right. */
-@media (max-width: 40rem) {
+/*
+ * The fixed tracks take 38.5rem; below 50rem the quotas or models column would get under
+ * about 11.5rem and its meters would spill into the proxy column.
+ */
+@container (max-width: 50rem) {
   .head {
     display: none;
   }

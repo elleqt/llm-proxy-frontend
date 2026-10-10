@@ -18,8 +18,8 @@ import {
   useDiscardGuard,
 } from "../../shared/ui";
 import { ProxySection, sectionDraft } from "../account-proxy/ProxySection";
-import { proxyChanged, proxyInput } from "../account-proxy/proxy";
-import styles from "./CompatProvider.module.css";
+import { proxyChanged, proxyDirty, proxyInput } from "../account-proxy/proxy";
+import styles from "./CompatDrawer.module.css";
 import { levelsInput, levelsKind, providerLevels, sameLevels } from "./levels";
 import { LEVELS_MARK, ReasoningLevels } from "./ReasoningLevels";
 
@@ -126,7 +126,7 @@ export function CompatDrawer({
       const stored = storedModels?.find((m) => m.name === row.name);
       return stored === undefined || row.alias.trim() !== (stored.alias ?? "");
     }) ||
-    proxyChanged(proxy, account?.proxy) ||
+    proxyDirty(proxy, account?.proxy) ||
     (levels.touched && (untouchedList == null || !sameLevels(levels.list, untouchedList)));
   const guard = useDiscardGuard(dirty, onClose);
 
