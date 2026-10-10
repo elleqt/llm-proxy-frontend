@@ -2,22 +2,62 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
 }
 
-.legend {
-  padding: 0 0.25rem;
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.title {
+  margin: 0;
   font-size: 0.9rem;
 }
 
-/* Even columns, so every line lines up; a narrow dialog gets fewer of them. Own values join the grid. */
-.options {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-  gap: 0.25rem 1rem;
+/* The badge sits at the far end of the heading line. */
+.heading > :last-child {
+  margin-left: auto;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* An own value may run to 32 characters: it wraps inside its chip. */
+.chip {
+  max-width: 100%;
+  padding: 0.15rem 0.65rem;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.chip:focus-visible,
+.link:focus-visible,
+.help:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.addChip {
+  font-family: inherit;
+  color: var(--dim);
+  border-style: dashed;
 }
 
 .row {
@@ -27,14 +67,80 @@
   gap: 0.5rem;
 }
 
-/* An own value may run to 32 characters: it wraps inside its column rather than spilling over the next. */
-.mono {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  overflow-wrap: anywhere;
+.hint,
+.error {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .hint {
-  margin: 0;
   color: var(--dim);
-  font-size: 0.85rem;
+}
+
+.link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.link:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+
+.tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--dim);
+  border-radius: 50%;
+  cursor: help;
+}
+
+.help:hover,
+.help[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.tipBox {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: -4rem;
+  z-index: 1;
+  width: min(20rem, 80vw);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--panel);
+  background: var(--fg);
+  border-radius: 6px;
+}
+
+.tipBox[data-open] {
+  display: block;
+}
+
+.tipBox code {
+  padding: 0 0.2rem;
+  background: color-mix(in srgb, var(--panel) 15%, transparent);
+  border-radius: 3px;
 }

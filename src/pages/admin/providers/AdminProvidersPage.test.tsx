@@ -1,6 +1,6 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within, type BoundFunctions, type queries } from "@testing-library/react";
 import { HttpResponse } from "msw";
-import userEvent from "@testing-library/user-event";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
@@ -71,7 +71,7 @@ describe("add-account wizard", () => {
       "team (chatgpt)",
     );
     expect(sent).toEqual({ sessionId: "session-chatgpt", callbackURL: CALLBACK });
-    expect(await screen.findByRole("cell", { name: "team" })).toBeInTheDocument();
+    expect(await screen.findByRole("listitem", { name: "chatgpt team" })).toBeInTheDocument();
     expect(cached(queryClient)).not.toContain("code=example");
   });
 
@@ -172,7 +172,9 @@ describe("add-account wizard", () => {
   });
 });
 
-describe("account table", () => {
+const editLabel = (name: string) => fill(en["providers.editLabel"], { name });
+
+describe("account list", () => {
   it("shows each quota window's used share and reset time", async () => {
     providers([
       fixtures.providerAccount({
@@ -192,6 +194,88 @@ describe("account table", () => {
     const week = screen.getByRole("meter", { name: fill(en["providers.quotaLabel"], { window: "7d" }) });
     expect(week).toHaveAttribute("aria-valuenow", "90");
     expect(week.parentElement).not.toHaveTextContent("resets");
+  });
+
+  it("lists subscriptions and OpenAI-compatible providers in groups of their own", async () => {
+    providers([fixtures.providerAccount({ label: "ops", lastError: "refresh token rejected (401)" }), compatAccount()]);
+    renderApp("/admin/providers");
+
+    const subscriptions = await screen.findByRole("region", { name: en["providers.subscriptions"] });
+    const ops = within(subscriptions).getByRole("listitem", { name: "claude ops" });
+    // The account's last error, as a line under its name.
+    expect(within(ops).getByText("refresh token rejected (401)")).toBeInTheDocument();
+    expect(within(subscriptions).queryByText("https://api.example.com/v1")).not.toBeInTheDocument();
+
+    const compat = screen.getByRole("region", { name: en["providers.compatGroup"] });
+    expect(within(compat).getByRole("listitem", { name: "acme https://api.example.com/v1" })).toBeInTheDocument();
+    expect(within(compat).queryByRole("listitem", { name: "claude ops" })).not.toBeInTheDocument();
+  });
+
+  it("renders no group for which there is no account", async () => {
+    providers([compatAccount()]);
+    renderApp("/admin/providers");
+
+    expect(await screen.findByRole("region", { name: en["providers.compatGroup"] })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: en["providers.subscriptions"] })).not.toBeInTheDocument();
+  });
+
+  it("shows four models and the rest behind +N, opened from the keyboard, by a click or by hover", async () => {
+    providers([
+      compatAccount({
+        models: [
+          { name: "model-a" },
+          { name: "model-b" },
+          { name: "model-c", alias: "c-fast" },
+          { name: "model-d" },
+          { name: "model-e" },
+          { name: "model-f" },
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    const row = await screen.findByRole("listitem", { name: "acme https://api.example.com/v1" });
+    const tags = within(within(row).getByRole("list", { name: en["compat.models"] })).getAllByRole("listitem");
+    expect(tags.slice(0, 4).map((tag) => tag.textContent)).toEqual(["model-a", "model-b", "model-c → c-fast", "model-d"]);
+    expect(tags).toHaveLength(5);
+    expect(within(row).queryByText("model-e")).not.toBeVisible();
+    const more = within(tags[4] as HTMLElement).getByRole("button", { name: fill(en["providers.moreModels"], { n: 2 }) });
+    expect(more).toHaveTextContent("+2");
+    const popover = () => screen.queryByRole("dialog", { name: fill(en["providers.moreModelsTitle"], { name: "acme" }) });
+    expect(popover()).toBeNull();
+
+    // Tab from the control before it.
+    act(() => screen.getByRole("button", { name: en["providerLogin.open"] }).focus());
+    await user.tab();
+    expect(more).toHaveFocus();
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(within(popover() as HTMLElement).getAllByRole("listitem").map((tag) => tag.textContent)).toEqual([
+      "model-e",
+      "model-f",
+    ]);
+    await user.keyboard("{Escape}");
+    expect(popover()).toBeNull();
+    await user.keyboard("{Enter}");
+    expect(popover()).not.toBeNull();
+    // Focus leaving closes it.
+    await user.tab();
+    expect(popover()).toBeNull();
+
+    await user.click(more);
+    expect(popover()).not.toBeNull();
+    // A click on the open popover's button closes it again.
+    await user.click(more);
+    expect(popover()).toBeNull();
+
+    // The pointer opens it too, and takes it away on leaving (focus gone first).
+    act(() => more.blur());
+    await user.unhover(more);
+    expect(popover()).toBeNull();
+    await user.hover(more);
+    expect(popover()).not.toBeNull();
+    await user.unhover(more);
+    expect(popover()).toBeNull();
   });
 
   it("removes an account only once its name is typed", async () => {
@@ -223,6 +307,66 @@ describe("account table", () => {
     await waitFor(() => expect(removed).toEqual(["claude-ops@example.com"]));
   });
 
+  it("removes from inside the drawer: the confirmation opens on top, and focus returns to the page heading", async () => {
+    let accounts = [
+      fixtures.providerAccount({ label: "ops" }),
+      fixtures.providerAccount({ id: "claude-spare@example.com", label: "spare", email: null }),
+    ];
+    providers([]);
+    const removed: string[] = [];
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json(accounts)),
+      http.delete("/api/admin/providers/{accountId}", ({ params }) => {
+        removed.push(params.accountId);
+        accounts = accounts.filter((a) => a.id !== params.accountId);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: editLabel("ops") }));
+    const drawer = screen.getByRole("dialog", { name: "claude · ops" });
+    await user.click(within(drawer).getByRole("button", { name: fill(en["providers.removeLabel"], { name: "ops" }) }));
+
+    const confirm = screen.getByRole("dialog", { name: fill(en["providers.removeTitle"], { name: "ops" }) });
+    // Nested: the drawer stays open beneath, inert while the confirmation is on top.
+    expect(drawer).toBeInTheDocument();
+    expect(drawer.parentElement).toHaveAttribute("inert");
+    expect(within(confirm).getByRole("button", { name: en["ui.cancel"] })).toHaveFocus();
+    await user.type(within(confirm).getByLabelText(fill(en["admin.typeToConfirm"], { name: "ops" })), "ops");
+    await user.click(within(confirm).getByRole("button", { name: en["providers.removeConfirm"] }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(removed).toEqual(["claude-ops@example.com"]);
+    expect(screen.queryByRole("listitem", { name: "claude ops" })).not.toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: "claude spare" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: en["page.admin.providers.title"] })).toHaveFocus();
+  });
+
+  it("keeps focus on the page when the last account is removed", async () => {
+    let accounts = [fixtures.providerAccount({ label: "ops" })];
+    providers([]);
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json(accounts)),
+      http.delete("/api/admin/providers/{accountId}", ({ params }) => {
+        accounts = accounts.filter((a) => a.id !== params.accountId);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: fill(en["providers.removeLabel"], { name: "ops" }) }));
+    const confirm = screen.getByRole("dialog", { name: fill(en["providers.removeTitle"], { name: "ops" }) });
+    await user.type(within(confirm).getByLabelText(fill(en["admin.typeToConfirm"], { name: "ops" })), "ops");
+    await user.click(within(confirm).getByRole("button", { name: en["providers.removeConfirm"] }));
+
+    expect(await screen.findByText(en["providers.empty"])).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: en["page.admin.providers.title"] })).toHaveFocus();
+  });
+
   it("disables after a confirmation naming the account, and enables at once", async () => {
     let account = fixtures.providerAccount({ label: "ops" });
     providers([]);
@@ -239,14 +383,21 @@ describe("account table", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["providers.disableLabel"], { name: "ops" }) }));
+    // The switch's label is hidden from sight, not from its name.
+    const toggle = await screen.findByRole("switch", { name: fill(en["providers.enabledLabel"], { name: "ops" }) });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
     const dialog = screen.getByRole("dialog", { name: fill(en["providers.disableTitle"], { name: "ops" }) });
+    expect(sent).toEqual([]);
     await user.click(
       within(dialog).getByRole("button", { name: fill(en["providers.disableConfirm"], { name: "ops" }) }),
     );
 
-    await user.click(await screen.findByRole("button", { name: fill(en["providers.enableLabel"], { name: "ops" }) }));
-    await screen.findByRole("button", { name: fill(en["providers.disableLabel"], { name: "ops" }) });
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    await user.click(toggle);
+    // Enabling asks nothing.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(toggle).toBeChecked());
     expect(sent).toEqual([true, false]);
   });
 
@@ -258,9 +409,15 @@ describe("account table", () => {
     ]);
     renderApp("/admin/providers");
 
-    expect(await screen.findByRole("cell", { name: en["proxy.inherit"] })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: en["proxy.direct"] })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: `http://proxy.example.com:3128 · ${en["proxy.withCredentials"]}` })).toBeInTheDocument();
+    const a = await screen.findByRole("listitem", { name: "claude a" });
+    expect(within(a).getByText(en["proxy.inherit"])).toBeInTheDocument();
+    const b = screen.getByRole("listitem", { name: "claude b" });
+    expect(within(b).getByText(en["proxy.direct"])).toBeInTheDocument();
+    for (const row of [a, b]) expect(within(row).queryByRole("img", { name: en["proxy.withCredentials"] })).toBeNull();
+    const c = screen.getByRole("listitem", { name: "claude c" });
+    expect(within(c).getByText("HTTP")).toBeInTheDocument();
+    expect(within(c).getByText("proxy.example.com:3128")).toBeInTheDocument();
+    expect(within(c).getByRole("img", { name: en["proxy.withCredentials"] })).toBeInTheDocument();
   });
 
   it("sets an own proxy, keeps the typed URL in no cache, and shows a refused URL on its field", async () => {
@@ -282,25 +439,30 @@ describe("account table", () => {
     const user = userEvent.setup();
     const { queryClient } = renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["proxy.editLabel"], { name: "ops" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["proxy.title"], { name: "ops" }) });
-    expect(within(dialog).getByRole("button", { name: en["proxy.save"] })).toBeDisabled();
-    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "custom");
+    await user.click(await screen.findByRole("button", { name: editLabel("ops") }));
+    const dialog = screen.getByRole("dialog", { name: "claude · ops" });
+    expect(within(dialog).getByRole("button", { name: en["providers.save"] })).toBeDisabled();
+    await user.click(within(dialog).getByRole("radio", { name: en["proxy.ownSegment"] }));
     await user.type(within(dialog).getByLabelText(en["proxy.url"]), "ftp://bad.example.com");
-    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["providers.save"] }));
     expect(await within(dialog).findByText(en["error.invalid_input"])).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(en["proxy.url"])).toHaveAccessibleDescription(
+      expect.stringContaining(en["error.invalid_input"]),
+    );
 
     const url = within(dialog).getByLabelText(en["proxy.url"]);
     await user.clear(url);
     await user.type(url, "http://ops:proxy-pass@proxy.example.com:3128");
-    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["providers.save"] }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(sent).toEqual([
       { mode: "custom", url: "ftp://bad.example.com" },
       { mode: "custom", url: "http://ops:proxy-pass@proxy.example.com:3128" },
     ]);
-    expect(await screen.findByRole("cell", { name: `http://proxy.example.com:3128 · ${en["proxy.withCredentials"]}` })).toBeInTheDocument();
+    const row = screen.getByRole("listitem", { name: "claude ops" });
+    expect(await within(row).findByText("proxy.example.com:3128")).toBeInTheDocument();
+    expect(within(row).getByRole("img", { name: en["proxy.withCredentials"] })).toBeInTheDocument();
     expect(cached(queryClient)).not.toContain("proxy-pass");
   });
 
@@ -320,16 +482,54 @@ describe("account table", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["proxy.editLabel"], { name: "ops" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["proxy.title"], { name: "ops" }) });
-    expect(within(dialog).getByLabelText(en["proxy.url"])).toHaveAccessibleDescription(
-      fill(en["proxy.urlKeepHint"], { url: `http://proxy.example.com:3128 (${en["proxy.withCredentials"]})` }),
-    );
-    expect(within(dialog).getByRole("button", { name: en["proxy.save"] })).toBeDisabled();
-    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "direct");
-    await user.click(within(dialog).getByRole("button", { name: en["proxy.save"] }));
+    await user.click(await screen.findByRole("button", { name: editLabel("ops") }));
+    const dialog = screen.getByRole("dialog", { name: "claude · ops" });
+    // The stored proxy shows as its line, kept while it shows: no URL field to fill.
+    const proxy = within(within(dialog).getByRole("region", { name: en["proxy.column"] }));
+    expect(proxy.getByRole("radio", { name: en["proxy.ownSegment"] })).toBeChecked();
+    expect(proxy.getByText("proxy.example.com:3128")).toBeInTheDocument();
+    expect(proxy.getByRole("img", { name: en["proxy.withCredentials"] })).toBeInTheDocument();
+    expect(proxy.queryByLabelText(en["proxy.url"])).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: en["providers.save"] })).toBeDisabled();
+    await user.click(proxy.getByRole("radio", { name: en["proxy.direct"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["providers.save"] }));
 
     await waitFor(() => expect(sent).toEqual([{ mode: "direct" }]));
+  });
+
+  it("asks before a stray close drops a typed proxy URL, by Escape or by a click beside the drawer", async () => {
+    providers([
+      fixtures.providerAccount({ label: "ops", proxy: { mode: "custom", url: "http://proxy.example.com:3128", hasCredentials: true } }),
+    ]);
+    const sent: unknown[] = [];
+    server.use(
+      http.patch("/api/admin/providers/{accountId}", async ({ request, response }) => {
+        sent.push(await request.json());
+        return response(200).json(fixtures.providerAccount());
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp("/admin/providers");
+
+    await user.click(await screen.findByRole("button", { name: editLabel("ops") }));
+    const drawer = screen.getByRole("dialog", { name: "claude · ops" });
+    await user.click(within(drawer).getByRole("button", { name: en["proxy.replace"] }));
+    await user.type(within(drawer).getByLabelText(en["proxy.url"]), "http://ops:proxy-pass@new.example.com:8080");
+
+    await user.keyboard("{Escape}");
+    await user.click(within(screen.getByRole("dialog", { name: en["ui.discardTitle"] })).getByRole("button", { name: en["ui.keepEditing"] }));
+    expect(screen.queryByRole("dialog", { name: en["ui.discardTitle"] })).not.toBeInTheDocument();
+    expect(within(drawer).getByLabelText(en["proxy.url"])).toHaveValue("http://ops:proxy-pass@new.example.com:8080");
+
+    fireEvent.mouseDown(drawer.parentElement as HTMLElement);
+    await user.click(within(screen.getByRole("dialog", { name: en["ui.discardTitle"] })).getByRole("button", { name: en["ui.keepEditing"] }));
+    expect(drawer).toBeInTheDocument();
+    expect(within(drawer).getByLabelText(en["proxy.url"])).toHaveValue("http://ops:proxy-pass@new.example.com:8080");
+
+    fireEvent.mouseDown(drawer.parentElement as HTMLElement);
+    await user.click(within(screen.getByRole("dialog", { name: en["ui.discardTitle"] })).getByRole("button", { name: en["ui.discard"] }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(sent).toEqual([]);
   });
 });
 
@@ -353,8 +553,8 @@ function compatAccount(overrides: Partial<NonNullable<Schemas["ProviderAccount"]
   });
 }
 
-/** Opens the OpenAI-compatible form the one way there is: the "Add provider" wizard's last choice. */
-async function openCompatForm(user: ReturnType<typeof userEvent.setup>) {
+/** Opens the OpenAI-compatible drawer the one way there is to add one: the "Add provider" wizard's last choice. */
+async function openCompatForm(user: UserEvent) {
   await user.click(await screen.findByRole("button", { name: en["providerLogin.open"] }));
   const wizard = screen.getByRole("dialog", { name: en["providerLogin.title"] });
   await user.selectOptions(within(wizard).getByLabelText(en["providerLogin.provider"]), "openai-compatible");
@@ -388,7 +588,7 @@ describe("OpenAI-compatible providers", () => {
     await user.type(within(dialog).getByLabelText(en["compat.name"]), "AcMe");
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
     await user.type(within(dialog).getByLabelText(en["compat.apiKey"]), COMPAT_KEY);
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
 
     const pickB = await within(dialog).findByRole("checkbox", { name: fill(en["compat.serve"], { model: "model-b" }) });
     expect(discovered).toEqual({ baseURL: "https://api.example.com/v1", apiKey: COMPAT_KEY, proxy: { mode: "inherit" } });
@@ -408,7 +608,7 @@ describe("OpenAI-compatible providers", () => {
       models: [{ name: "model-b", alias: "b-fast" }],
       proxy: { mode: "inherit" },
     });
-    expect(await screen.findByRole("cell", { name: "https://api.example.com/v1" })).toBeInTheDocument();
+    expect(await screen.findByRole("listitem", { name: "acme https://api.example.com/v1" })).toBeInTheDocument();
     expect(cached(queryClient)).not.toContain(COMPAT_KEY);
   });
 
@@ -444,12 +644,13 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
-    expect(within(dialog).getByLabelText(en["compat.name"])).toHaveAttribute("readonly");
+    await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+    const dialog = screen.getByRole("dialog", { name: "acme" });
+    // The name cannot change: it is the drawer's heading, not a field.
+    expect(within(dialog).queryByLabelText(en["compat.name"])).not.toBeInTheDocument();
 
     // At the stored base URL, discovery may use the stored key.
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
     await waitFor(() => expect(discovers).toHaveLength(1));
     expect(discovers[0]).toEqual({
       baseURL: "https://api.example.com/v1",
@@ -457,24 +658,28 @@ describe("OpenAI-compatible providers", () => {
       proxy: { mode: "inherit" },
     });
 
-    // At another one it may not, and the key field says so.
+    // At another one it may not, and the key's line says so.
     const baseURL = within(dialog).getByLabelText(en["compat.baseURL"]);
     await user.clear(baseURL);
     await user.type(baseURL, "https://other.example.com/v1");
     expect(within(dialog).getByLabelText(en["compat.apiKey"])).toHaveAccessibleDescription(en["compat.apiKeyMovedHint"]);
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
     await waitFor(() => expect(discovers).toHaveLength(2));
     expect(discovers[1]).toEqual({ baseURL: "https://other.example.com/v1", proxy: { mode: "inherit" } });
 
     await user.clear(baseURL);
     await user.type(baseURL, "https://api.example.com/v1");
-    await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+    // Save waits for a change.
+    const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
+    expect(save).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
+    await user.click(save);
 
     await waitFor(() => expect(updates).toHaveLength(1));
     expect(updates[0]).toEqual({
       baseURL: "https://api.example.com/v1",
       models: [{ name: "model-a" }],
-      prefix: "",
+      prefix: "acme",
       clearApiKey: false,
     });
   });
@@ -503,9 +708,9 @@ describe("OpenAI-compatible providers", () => {
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
     await user.type(within(dialog).getByLabelText(en["compat.name"]), "acme");
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
-    await user.selectOptions(within(dialog).getByLabelText(en["proxy.mode"]), "custom");
+    await user.click(within(dialog).getByRole("radio", { name: en["proxy.ownSegment"] }));
     await user.type(within(dialog).getByLabelText(en["proxy.url"]), "socks5://ops:proxy-pass@proxy.example.com:1080");
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
     await user.click(await within(dialog).findByRole("checkbox", { name: fill(en["compat.serve"], { model: "model-a" }) }));
     await user.click(within(dialog).getByRole("button", { name: en["compat.save"] }));
 
@@ -535,18 +740,23 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+    const dialog = screen.getByRole("dialog", { name: "acme" });
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
     await waitFor(() => expect(discovers).toHaveLength(1));
     expect(discovers[0]).toEqual({ baseURL: "https://api.example.com/v1", accountId: "openai-compatible-acme" });
 
+    // Save waits for a change; one that leaves the proxy alone.
+    await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
     await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
     await waitFor(() => expect(updates).toHaveLength(1));
     expect(updates[0]).not.toHaveProperty("proxy");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-    const again = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+    const again = screen.getByRole("dialog", { name: "acme" });
+    await user.click(
+      within(within(again).getByRole("region", { name: en["proxy.column"] })).getByRole("button", { name: en["proxy.replace"] }),
+    );
     await user.type(within(again).getByLabelText(en["proxy.url"]), "http://new.example.com:8080");
     await user.click(within(again).getByRole("button", { name: en["compat.saveEdit"] }));
     await waitFor(() => expect(updates).toHaveLength(2));
@@ -566,17 +776,20 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+    await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+    const dialog = screen.getByRole("dialog", { name: "acme" });
     const baseURL = within(dialog).getByLabelText(en["compat.baseURL"]);
     await user.clear(baseURL);
     await user.type(baseURL, "https://other.example.com/v1");
 
     // The stored proxy would be used through the account, but the stored key does not follow the URL.
-    const discover = within(dialog).getByRole("button", { name: en["compat.discover"] });
+    const discover = within(dialog).getByRole("button", { name: en["compat.refresh"] });
     expect(discover).toBeDisabled();
     expect(within(dialog).getByLabelText(en["compat.apiKey"])).toHaveAccessibleDescription(en["compat.apiKeyMovedHint"]);
 
+    await user.click(
+      within(within(dialog).getByRole("group", { name: en["compat.apiKey"] })).getByRole("button", { name: en["compat.keyReplace"] }),
+    );
     await user.type(within(dialog).getByLabelText(en["compat.apiKey"]), COMPAT_KEY);
     expect(discover).toBeEnabled();
     await user.click(discover);
@@ -601,16 +814,21 @@ describe("OpenAI-compatible providers", () => {
     const user = userEvent.setup();
     renderApp("/admin/providers");
 
-    await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-    const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
-    const discover = within(dialog).getByRole("button", { name: en["compat.discover"] });
+    await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+    const dialog = screen.getByRole("dialog", { name: "acme" });
+    const discover = within(dialog).getByRole("button", { name: en["compat.refresh"] });
     expect(discover).toBeEnabled();
     expect(within(dialog).queryByText(en["compat.discoverNeedsKey"])).not.toBeInTheDocument();
 
-    await user.click(within(dialog).getByLabelText(en["compat.clearKey"]));
+    await user.click(
+      within(within(dialog).getByRole("group", { name: en["compat.apiKey"] })).getByRole("button", { name: en["compat.keyRemove"] }),
+    );
     expect(discover).toBeDisabled();
     expect(within(dialog).getByText(en["compat.discoverNeedsKey"])).toBeInTheDocument();
 
+    await user.click(
+      within(within(dialog).getByRole("region", { name: en["proxy.column"] })).getByRole("button", { name: en["proxy.replace"] }),
+    );
     await user.type(within(dialog).getByLabelText(en["proxy.url"]), "http://new.example.com:8080");
     expect(discover).toBeEnabled();
     expect(within(dialog).queryByText(en["compat.discoverNeedsKey"])).not.toBeInTheDocument();
@@ -636,7 +854,7 @@ describe("OpenAI-compatible providers", () => {
     await openCompatForm(user);
     const dialog = screen.getByRole("dialog", { name: en["compat.titleAdd"] });
     await user.type(within(dialog).getByLabelText(en["compat.baseURL"]), "https://api.example.com/v1");
-    await user.click(within(dialog).getByRole("button", { name: en["compat.discover"] }));
+    await user.click(within(dialog).getByRole("button", { name: en["compat.refresh"] }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.provider_auth_failed"]);
   });
@@ -646,11 +864,15 @@ describe("OpenAI-compatible providers", () => {
     // The hint's `code` marks are rendered as code, so its accessible text has none.
     const HINT = en["compat.levelsHint"].replaceAll("`", "");
 
-    /** The reasoning levels block of `model` in `dialog`. */
-    const levels = (dialog: HTMLElement, model: string) =>
-      within(within(dialog).getByRole("group", { name: fill(en["compat.levelsFor"], { model }) }));
+    /** Opens the drawer's Advanced section; its reasoning levels block, once the default set is in. */
+    async function openLevels(user: UserEvent, dialog: HTMLElement) {
+      await user.click(within(dialog).getByRole("button", { name: new RegExp(`^${en["compat.advanced"]}`) }));
+      return within(await within(dialog).findByRole("region", { name: en["compat.levels"] }));
+    }
+    const pressed = (block: BoundFunctions<typeof queries>, level: string) =>
+      block.getByRole("button", { name: level }).getAttribute("aria-pressed");
 
-    /** Opens the edit form of the one stored provider; updates land in `updates`. */
+    /** Opens the drawer of the one stored provider and its levels block; updates land in `updates`. */
     async function editForm(account: Schemas["ProviderAccount"]) {
       providers([account]);
       const updates: Schemas["CompatProviderUpdate"][] = [];
@@ -662,10 +884,10 @@ describe("OpenAI-compatible providers", () => {
       );
       const user = userEvent.setup();
       renderApp("/admin/providers");
-      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
-      await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
-      return { user, dialog, updates };
+      await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+      const dialog = screen.getByRole("dialog", { name: "acme" });
+      const block = await openLevels(user, dialog);
+      return { user, dialog, block, updates };
     }
 
     it("start from the default set under the hint, and a new provider's models are sent without them", async () => {
@@ -687,12 +909,11 @@ describe("OpenAI-compatible providers", () => {
       await user.type(within(dialog).getByLabelText(en["compat.addModel"]), "model-a");
       await user.click(within(dialog).getByRole("button", { name: en["compat.addModelButton"] }));
 
-      const group = await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
-      expect(group).toHaveAccessibleDescription(HINT);
-      const block = levels(dialog, "model-a");
-      for (const level of DEFAULTS) expect(block.getByRole("checkbox", { name: level })).toBeChecked();
+      const block = await openLevels(user, dialog);
+      expect(block.getByRole("button", { name: en["compat.levelsHelp"] })).toHaveAccessibleDescription(HINT);
+      for (const level of DEFAULTS) expect(pressed(block, level)).toBe("true");
       // Ollama refuses `auto`: offered, but not in the default set.
-      expect(block.getByRole("checkbox", { name: "auto" })).not.toBeChecked();
+      expect(pressed(block, "auto")).toBe("false");
       expect(block.getByText(en["compat.levelsDefault"])).toBeInTheDocument();
       expect(block.getByRole("button", { name: en["compat.levelsReset"] })).toBeDisabled();
 
@@ -703,10 +924,9 @@ describe("OpenAI-compatible providers", () => {
     });
 
     it("become an own list once a level is unchecked", async () => {
-      const { user, dialog, updates } = await editForm(compatAccount());
-      const block = levels(dialog, "model-a");
+      const { user, dialog, block, updates } = await editForm(compatAccount());
 
-      await user.click(block.getByRole("checkbox", { name: "max" }));
+      await user.click(block.getByRole("button", { name: "max" }));
       expect(block.getByText(en["compat.levelsOwn"])).toBeInTheDocument();
       await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
 
@@ -715,13 +935,14 @@ describe("OpenAI-compatible providers", () => {
     });
 
     it("go back to the default set on Reset, and are then not sent", async () => {
-      const { user, dialog, updates } = await editForm(compatAccount());
-      const block = levels(dialog, "model-a");
+      const { user, dialog, block, updates } = await editForm(compatAccount());
 
-      await user.click(block.getByRole("checkbox", { name: "max" }));
+      await user.click(block.getByRole("button", { name: "max" }));
       await user.click(block.getByRole("button", { name: en["compat.levelsReset"] }));
-      expect(block.getByRole("checkbox", { name: "max" })).toBeChecked();
+      expect(pressed(block, "max")).toBe("true");
       expect(block.getByText(en["compat.levelsDefault"])).toBeInTheDocument();
+      // Back where it started: Save waits for another change.
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
       await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
 
       await waitFor(() => expect(updates).toHaveLength(1));
@@ -729,20 +950,20 @@ describe("OpenAI-compatible providers", () => {
     });
 
     it("take an own value, checked and lower-cased, and refuse a malformed one in place", async () => {
-      const { user, dialog, updates } = await editForm(compatAccount());
-      const block = levels(dialog, "model-a");
+      const { user, dialog, block, updates } = await editForm(compatAccount());
+      await user.click(block.getByRole("button", { name: `+ ${en["compat.levelsAdd"]}` }));
       const own = block.getByLabelText(en["compat.levelsAdd"]);
 
       await user.type(own, "9x");
       await user.click(block.getByRole("button", { name: en["compat.levelsAddButton"] }));
       expect(own).toHaveAccessibleDescription(en["compat.levelsInvalid"]);
-      expect(block.queryByRole("checkbox", { name: "9x" })).not.toBeInTheDocument();
+      expect(block.queryByRole("button", { name: "9x" })).not.toBeInTheDocument();
 
       await user.clear(own);
       await user.type(own, " Ultra {Enter}");
-      expect(block.getByRole("checkbox", { name: "ultra" })).toBeChecked();
-      expect(own).toHaveValue("");
-      expect(own).not.toHaveAccessibleDescription(en["compat.levelsInvalid"]);
+      expect(pressed(block, "ultra")).toBe("true");
+      // Taken: the field closes, nothing left in it.
+      expect(block.queryByLabelText(en["compat.levelsAdd"])).not.toBeInTheDocument();
       await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
 
       await waitFor(() => expect(updates).toHaveLength(1));
@@ -750,36 +971,66 @@ describe("OpenAI-compatible providers", () => {
     });
 
     it("show a model's own list as such, and send it back unchanged", async () => {
-      const { user, dialog, updates } = await editForm(
+      const { user, dialog, block, updates } = await editForm(
         compatAccount({ models: [{ name: "model-a", reasoningLevels: ["none", "high", "ultra"] }] }),
       );
-      const block = levels(dialog, "model-a");
 
-      for (const level of ["none", "high", "ultra"]) expect(block.getByRole("checkbox", { name: level })).toBeChecked();
-      expect(block.getByRole("checkbox", { name: "max" })).not.toBeChecked();
+      for (const level of ["none", "high", "ultra"]) expect(pressed(block, level)).toBe("true");
+      expect(pressed(block, "max")).toBe("false");
       expect(block.getByText(en["compat.levelsOwn"])).toBeInTheDocument();
       expect(block.getByRole("button", { name: en["compat.levelsReset"] })).toBeEnabled();
+      // Save waits for a change; one elsewhere in the drawer.
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
       await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
 
       await waitFor(() => expect(updates).toHaveLength(1));
       expect(updates[0]?.models).toEqual([{ name: "model-a", reasoningLevels: ["none", "high", "ultra"] }]);
     });
 
+    it("leave the models' different lists unchecked, and an untouched block sends each model its own", async () => {
+      const { user, dialog, block, updates } = await editForm(
+        compatAccount({ models: [{ name: "model-a", reasoningLevels: ["low"] }, { name: "model-b" }] }),
+      );
+
+      expect(block.getByText(en["compat.levelsMixed"])).toBeInTheDocument();
+      for (const level of ["low", "medium", "high"]) expect(pressed(block, level)).toBe("false");
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([{ name: "model-a", reasoningLevels: ["low"] }, { name: "model-b" }]);
+    });
+
+    it("give every picked model the list once touched", async () => {
+      const { user, dialog, block, updates } = await editForm(
+        compatAccount({ models: [{ name: "model-a", reasoningLevels: ["low"] }, { name: "model-b" }] }),
+      );
+
+      await user.click(block.getByRole("button", { name: "low" }));
+      await user.click(block.getByRole("button", { name: "high" }));
+      await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
+
+      await waitFor(() => expect(updates).toHaveLength(1));
+      expect(updates[0]?.models).toEqual([
+        { name: "model-a", reasoningLevels: ["low", "high"] },
+        { name: "model-b", reasoningLevels: ["low", "high"] },
+      ]);
+    });
+
     it("refuse to save with none checked", async () => {
-      const { user, dialog, updates } = await editForm(
+      const { user, dialog, block, updates } = await editForm(
         compatAccount({ models: [{ name: "model-a", reasoningLevels: ["none", "high"] }] }),
       );
-      const block = levels(dialog, "model-a");
 
-      await user.click(block.getByRole("checkbox", { name: "none" }));
-      await user.click(block.getByRole("checkbox", { name: "high" }));
+      await user.click(block.getByRole("button", { name: "none" }));
+      await user.click(block.getByRole("button", { name: "high" }));
       await user.click(within(dialog).getByRole("button", { name: en["compat.saveEdit"] }));
 
       expect(within(dialog).getByRole("alert")).toHaveTextContent(en["compat.pickLevels"]);
       expect(updates).toEqual([]);
 
       // Checking a level again takes the refusal away.
-      await user.click(block.getByRole("checkbox", { name: "high" }));
+      await user.click(block.getByRole("button", { name: "high" }));
       expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
     });
 
@@ -804,17 +1055,20 @@ describe("OpenAI-compatible providers", () => {
       );
       const user = userEvent.setup();
       renderApp("/admin/providers");
-      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+      await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+      const dialog = screen.getByRole("dialog", { name: "acme" });
+      await user.click(within(dialog).getByRole("button", { name: new RegExp(`^${en["compat.advanced"]}`) }));
 
       expect(within(dialog).getByText(en["compat.levelsLoading"]).closest("[role=status]")).not.toBeNull();
+      // A change to save, so only the loading holds Save back.
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
       const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
       expect(save).toHaveAttribute("aria-busy", "true");
       await user.click(save);
       expect(updates).toEqual([]);
 
       act(() => release());
-      await within(dialog).findByRole("group", { name: fill(en["compat.levelsFor"], { model: "model-a" }) });
+      await within(dialog).findByRole("region", { name: en["compat.levels"] });
       await user.click(save);
       await waitFor(() => expect(updates).toHaveLength(1));
       expect(updates[0]?.models).toEqual([{ name: "model-a" }]);
@@ -836,12 +1090,14 @@ describe("OpenAI-compatible providers", () => {
       );
       const user = userEvent.setup();
       renderApp("/admin/providers");
-      await user.click(await screen.findByRole("button", { name: fill(en["compat.editLabel"], { name: "acme" }) }));
-      const dialog = screen.getByRole("dialog", { name: fill(en["compat.titleEdit"], { name: "acme" }) });
+      await user.click(await screen.findByRole("button", { name: editLabel("acme") }));
+      const dialog = screen.getByRole("dialog", { name: "acme" });
 
       expect(await within(dialog).findByRole("alert")).toHaveTextContent(en["error.internal"]);
       // Two picked models, one alert: the failure belongs to the form, not to each row.
       expect(within(dialog).getAllByRole("alert")).toHaveLength(1);
+      // A change to save, so only the failed load holds Save back.
+      await user.type(within(dialog).getByLabelText(en["compat.prefix"]), "acme");
       const save = within(dialog).getByRole("button", { name: en["compat.saveEdit"] });
       expect(save).toBeDisabled();
       await user.click(save);

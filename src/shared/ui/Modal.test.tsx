@@ -6,6 +6,7 @@ import { I18nProvider } from "../i18n";
 import { en } from "../i18n/en";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
+import styles from "./Modal.module.css";
 import { TextField } from "./TextField";
 
 function Harness({
@@ -291,5 +292,56 @@ describe("Modal", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("Page").closest("[inert]")).toBeNull();
     expect(document.documentElement.style.overflow).toBe("");
+  });
+});
+
+function DrawerHarness() {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <I18nProvider>
+      <button type="button" onClick={() => setOpen(true)}>
+        Edit
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Edit provider" variant="drawer">
+        <button type="button" onClick={() => setConfirming(true)}>
+          Delete
+        </button>
+        <Modal open={confirming} onClose={() => setConfirming(false)} title="Delete provider?">
+          <p>Sure?</p>
+        </Modal>
+      </Modal>
+    </I18nProvider>
+  );
+}
+
+describe("Modal drawer variant", () => {
+  it("renders a dialog with the drawer class", async () => {
+    const user = userEvent.setup();
+    render(<DrawerHarness />);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const drawer = screen.getByRole("dialog", { name: "Edit provider" });
+    expect(drawer).toHaveClass(styles.drawer!);
+    expect(drawer.parentElement).toHaveClass(styles.drawerBackdrop!);
+  });
+
+  it("stacks a dialog opened inside it on top and returns focus in order", async () => {
+    const user = userEvent.setup();
+    render(<DrawerHarness />);
+    const edit = screen.getByRole("button", { name: "Edit" });
+    await user.click(edit);
+    const remove = screen.getByRole("button", { name: "Delete" });
+    await user.click(remove);
+    expect(screen.getByRole("dialog", { name: "Delete provider?" })).toBeVisible();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Delete provider?" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit provider" })).toBeInTheDocument();
+    await waitFor(() => expect(remove).toHaveFocus());
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(edit).toHaveFocus());
   });
 });

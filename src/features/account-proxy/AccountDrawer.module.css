@@ -1,0 +1,38 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.heading {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.facts dt {
+  color: var(--dim);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}

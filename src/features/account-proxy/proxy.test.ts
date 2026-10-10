@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { en } from "../../shared/i18n/en";
-import { proxyChanged, proxyDraft, proxyInput, proxyLabel } from "./proxy";
-
-const t = (key: keyof typeof en) => en[key];
+import { proxyChanged, proxyDraft, proxyInput, proxyParts } from "./proxy";
 
 describe("proxy drafts", () => {
   it("start from the stored mode with no URL, and change only when the mode or a typed URL does", () => {
@@ -19,13 +16,11 @@ describe("proxy drafts", () => {
     expect(proxyInput({ mode: "custom", url: " http://p.example.com " })).toEqual({ mode: "custom", url: "http://p.example.com" });
     expect(proxyInput({ mode: "direct", url: "http://p.example.com" })).toEqual({ mode: "direct" });
   });
+});
 
-  it("label each mode, an own proxy by its address", () => {
-    expect(proxyLabel({ mode: "inherit" }, t)).toBe(en["proxy.inherit"]);
-    expect(proxyLabel({ mode: "direct" }, t)).toBe(en["proxy.direct"]);
-    expect(proxyLabel({ mode: "custom", url: "http://p.example.com:3128", hasCredentials: true }, t)).toBe(
-      `http://p.example.com:3128 · ${en["proxy.withCredentials"]}`,
-    );
-    expect(proxyLabel({ mode: "custom" }, t)).toBe(en["proxy.unreadable"]);
+describe("proxyParts", () => {
+  it("split an address into its upper-cased scheme and host:port", () => {
+    expect(proxyParts("socks5h://proxy.example.com:1080")).toEqual({ scheme: "SOCKS5H", host: "proxy.example.com:1080" });
+    expect(proxyParts("nonsense")).toBeNull();
   });
 });
