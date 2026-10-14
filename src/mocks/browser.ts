@@ -1114,5 +1114,5 @@ const handlers = [
 ];
 
 export async function startMockApi(): Promise<void> {
-  await setupWorker(...handlers).start({ onUnhandledRequest: "bypass", quiet: true });
+  await setupWorker(...handlers).start({ onUnhandledFrame: "bypass", quiet: true });
 }
