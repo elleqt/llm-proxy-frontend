@@ -147,7 +147,7 @@ useMutation({
 - **`renderApp(path)`** (`src/test/render.tsx`) renders the real routes + real `createQueryClient` (retry delay 0) and returns `{ router, queryClient, ...render }`. Use it for page and feature tests.
 - **MSW is the only network boundary** (`src/test/server.ts`):
   - `http` is openapi-msw typed by the contract.
-  - `onUnhandledRequest: "error"`, so every endpoint the screen hits needs `server.use(http.get("/api/...", ({ response }) => response(200).json(fixtures.me())))`. Default handlers answer `/api/config` (`fixtures.config()`, costs hidden from users), `/api/me/models` (one claude model), `/api/me/limits` (`fixtures.myLimits()`, no limits) and `/api/admin/config` (costs hidden); a test about any of them overrides it.
+  - `onUnhandledFrame: "error"`, so every endpoint the screen hits needs `server.use(http.get("/api/...", ({ response }) => response(200).json(fixtures.me())))`. Default handlers answer `/api/config` (`fixtures.config()`, costs hidden from users), `/api/me/models` (one claude model), `/api/me/limits` (`fixtures.myLimits()`, no limits) and `/api/admin/config` (costs hidden); a test about any of them overrides it.
   - Use `fixtures.*` factories with overrides.
   - For errors the operation doesn't declare (the 401/403 conventions, 404, 409, 500, ...), use `response.untyped(errorResponse(status, { code, message: "" }))`, e.g. `errorResponse(409, { code: "catalog_disabled", message: "" })`.
 - **Queries and interaction:**

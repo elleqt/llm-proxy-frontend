@@ -9,7 +9,7 @@ import { server } from "./server";
 // slowed; a real failure is reported a few seconds later.
 configure({ asyncUtilTimeout: 5000 });
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();
