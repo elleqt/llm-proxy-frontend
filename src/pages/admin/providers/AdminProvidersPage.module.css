@@ -1,0 +1,230 @@
+/* The page, not the admin shell, is capped: other admin pages keep their width. */
+.page {
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+/* The rows switch to cards by the room the list has, not the viewport's (the admin shell takes some). */
+.groups {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Focus lands here only as a fallback, after a removal; it is not a control. */
+.heading:focus {
+  outline: none;
+}
+
+.groupTitle {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+}
+
+/*
+ * One grid for the header and every row of a group, so the columns line up. The actions
+ * track has a fixed width (switch and two icon buttons), the same in the header, which
+ * has no actions to size an `auto` track by.
+ */
+.head,
+.row {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr) 12.5rem 7rem;
+  grid-template-areas: "who main proxy actions";
+  gap: 1rem;
+  padding-inline: 1rem;
+}
+
+.head {
+  /* The rows sit inside the list's 1px border. */
+  padding-inline: calc(1rem + 1px);
+  padding-bottom: 0.3rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.row {
+  align-items: center;
+  padding-block: 0.75rem;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.who {
+  grid-area: who;
+  min-width: 0;
+}
+
+.main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.proxy {
+  grid-area: proxy;
+  min-width: 0;
+}
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+/* A disabled account steps back; its actions stay at full strength. */
+.row[data-disabled] > :not(.actions) {
+  opacity: 0.55;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A long address wraps inside the column rather than widening it. */
+.sub {
+  margin-top: 0.1rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.lastError {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.actionError {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+  text-align: end;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  padding: 0 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  /* A very long model name wraps inside the column rather than widening it. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.alias {
+  color: var(--dim);
+}
+
+.more {
+  position: relative;
+}
+
+.moreButton {
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--accent);
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--line));
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.moreButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 3;
+  /* As wide as its longest name, so a name keeps its line; only past the cap does it wrap. */
+  width: max-content;
+  min-width: 12rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+}
+
+.popover .tags {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The existing table card breakpoint: each row becomes a card, zones stacked, actions top-right. */
+/*
+ * The fixed tracks take 38.5rem; below 50rem the quotas or models column would get under
+ * about 11.5rem and its meters would spill into the proxy column.
+ */
+@container (max-width: 50rem) {
+  .head {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "who actions"
+      "main main"
+      "proxy proxy";
+    align-items: start;
+    gap: 0.6rem 1rem;
+  }
+}

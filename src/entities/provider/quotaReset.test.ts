@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { en } from "../../../shared/i18n/en";
-import { ru } from "../../../shared/i18n/ru";
-import { shortDateTime } from "../../../shared/lib/dates";
+import { en } from "../../shared/i18n/en";
+import { ru } from "../../shared/i18n/ru";
+import { shortDateTime } from "../../shared/lib/dates";
 import { quotaReset } from "./quotaReset";
 
 const NOW = Date.parse("2026-09-23T10:00:00Z");

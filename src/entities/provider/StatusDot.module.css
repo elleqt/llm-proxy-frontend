@@ -1,0 +1,22 @@
+/* Active green, an error red, a disabled account a hollow ring; a vendor's own word dimmed. */
+.dot {
+  flex: none;
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.dot[data-status="active"] {
+  background: var(--ok);
+}
+
+.dot[data-status="error"] {
+  background: var(--danger);
+}
+
+.dot[data-status="disabled"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dim);
+}
