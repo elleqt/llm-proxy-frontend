@@ -232,6 +232,61 @@ function preview(rules: string[]): Schemas["PolicyPreview"] {
   return { errors, covered };
 }
 
+/** What the backend shows of a proxy choice: never the URL's credentials, path or query. */
+function shownProxy(input: Schemas["AccountProxyInput"] | undefined): Schemas["AccountProxy"] {
+  if (input === undefined || input.mode !== "custom") return { mode: input?.mode ?? "inherit" };
+  const url = new URL(input.url ?? "");
+  return { mode: "custom", url: `${url.protocol}//${url.host}`, hasCredentials: url.username !== "" || url.password !== "" };
+}
+
+const DEFAULT_REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/**
+ * Every level upstream knows, in the backend's canonical order. A local copy of the form's list: the mock stands in
+ * for the server and depends on no feature code.
+ */
+const KNOWN_REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "auto"];
+
+/**
+ * The models with each own reasoning list normalised like the backend (trimmed, lower-cased, known levels first in
+ * their canonical order, own values after them as given), or null when a list is refused: a value off
+ * `^[a-z][a-z0-9_-]{0,31}$`, a duplicate, more than 16 values, or an empty list. A model without a list stays without
+ * the key.
+ */
+function withReasoningLevels(models: Schemas["CompatModel"][]) {
+  const out: Schemas["CompatModel"][] = [];
+  for (const { reasoningLevels, ...model } of models) {
+    if (reasoningLevels === undefined) {
+      out.push(model);
+      continue;
+    }
+    const levels = reasoningLevels.map((l) => l.trim().toLowerCase());
+    const valid =
+      levels.length >= 1 &&
+      levels.length <= 16 &&
+      new Set(levels).size === levels.length &&
+      levels.every((l) => /^[a-z][a-z0-9_-]{0,31}$/.test(l));
+    if (!valid) return null;
+    const known = KNOWN_REASONING_LEVELS.filter((l) => levels.includes(l));
+    const own = levels.filter((l) => !KNOWN_REASONING_LEVELS.includes(l));
+    out.push({ ...model, reasoningLevels: [...known, ...own] });
+  }
+  return out;
+}
+
+/** The backend's refusal of a proxy choice it cannot use, or null. */
+function proxyRefusal(input: Schemas["AccountProxyInput"] | undefined) {
+  if (input === undefined || input.mode !== "custom") return input?.url ? "proxy.url" : null;
+  try {
+    const url = new URL(input.url ?? "");
+    if (!["http:", "https:", "socks5:", "socks5h:"].includes(url.protocol) || url.hostname === "") return "proxy.url";
+    // Upstream dials a SOCKS host as given: without a port it cannot connect.
+    return url.protocol.startsWith("socks5") && url.port === "" ? "proxy.url" : null;
+  } catch {
+    return "proxy.url";
+  }
+}
+
 let accounts: Schemas["ProviderAccount"][] = [
   {
     id: "claude-ops@example.com",
@@ -240,6 +295,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "ops@example.com",
     status: "active",
     disabled: false,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(40 * 60_000),
     quota: [
@@ -264,6 +320,8 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "team@example.com",
     status: "error",
     disabled: false,
+    // A long host: the list fades its tail and shows it in full on hover or focus.
+    proxy: { mode: "custom", url: "socks5://egress-gateway.corp.example.com:1080", hasCredentials: true },
     lastError: "refresh token rejected (401)",
     lastRefreshedAt: ago(26 * HOUR),
     quota: [
@@ -281,6 +339,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "research-team-shared-account@subdivision.example.com",
     status: "active",
     disabled: false,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(3 * HOUR),
     quota: [
@@ -300,9 +359,49 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: null,
     status: "disabled",
     disabled: true,
+    proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: null,
     quota: [],
+  },
+  {
+    id: "openai-compatible-deepseek",
+    provider: "deepseek",
+    label: "deepseek",
+    email: null,
+    status: "active",
+    disabled: false,
+    proxy: { mode: "inherit" },
+    lastError: null,
+    lastRefreshedAt: null,
+    quota: [],
+    compat: {
+      name: "deepseek",
+      baseURL: "https://api.deepseek.example.com/v1",
+      hasApiKey: true,
+      // More than four: the list shows four and "+2".
+      models: [
+        { name: "deepseek-flash" },
+        { name: "deepseek-v4-pro" },
+        { name: "deepseek-chat", alias: "ds-chat" },
+        { name: "deepseek-reasoner", reasoningLevels: ["none", "high", "max"] },
+        { name: "deepseek-coder" },
+        { name: "deepseek-v3.2-exp" },
+      ],
+    },
+  },
+  {
+    id: "openai-compatible-ollama",
+    provider: "ollama",
+    label: "ollama",
+    email: null,
+    status: "active",
+    disabled: false,
+    proxy: { mode: "direct" },
+    lastError: null,
+    lastRefreshedAt: null,
+    quota: [],
+    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }] },
   },
 ];
 const loginSessions = new Map<string, { provider: string; expiresAt: number }>();
@@ -864,6 +963,7 @@ const handlers = [
       email: `new${n}@example.com`,
       status: "active",
       disabled: false,
+      proxy: { mode: "inherit" },
       lastError: null,
       lastRefreshedAt: new Date().toISOString(),
       quota: [],
@@ -872,10 +972,19 @@ const handlers = [
     return response(201).json(account);
   }),
   http.patch("/api/admin/providers/{accountId}", async ({ params, request, response }) => {
-    const { disabled } = await request.json();
+    const { disabled, proxy } = await request.json();
     const account = accounts.find((a) => a.id === params.accountId);
     if (account === undefined) return response.untyped(notFound());
-    const updated = { ...account, disabled, status: disabled ? "disabled" : "active" };
+    if (disabled === undefined && proxy === undefined) {
+      return response(422).json({ code: "invalid_input", message: "" });
+    }
+    const refused = proxyRefusal(proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const updated = {
+      ...account,
+      ...(disabled === undefined ? {} : { disabled, status: disabled ? "disabled" : "active" }),
+      ...(proxy === undefined ? {} : { proxy: shownProxy(proxy) }),
+    };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);
   }),
@@ -883,11 +992,16 @@ const handlers = [
     accounts = accounts.filter((a) => a.id !== params.accountId);
     return new HttpResponse(null, { status: 204 });
   }),
+  http.get("/api/admin/providers/compat/defaults", ({ response }) =>
+    response(200).json({ reasoningLevels: [...DEFAULT_REASONING_LEVELS] }),
+  ),
   http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
-    const { baseURL, apiKey } = await request.json();
+    const { baseURL, apiKey, proxy } = await request.json();
     if (!/^https?:\/\/[^/]/.test(baseURL)) {
       return response(422).json({ code: "invalid_input", message: "", field: "baseURL" });
     }
+    const refused = proxyRefusal(proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
     if (apiKey === "bad") return response(422).json({ code: "provider_auth_failed", message: "", field: "apiKey" });
     const served = new Set(accounts.flatMap((a) => a.compat?.models.map((m) => m.alias ?? m.name) ?? []));
     const models = ["deepseek-chat", "deepseek-reasoner", "llama3.1:8b"];
@@ -902,6 +1016,10 @@ const handlers = [
     if (accounts.some((a) => a.id === id)) {
       return response(409).json({ code: "conflict", message: "", field: "name" });
     }
+    const refused = proxyRefusal(body.proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const models = withReasoningLevels(body.models);
+    if (models === null) return response(422).json({ code: "invalid_input", message: "", field: "models" });
     const account: Schemas["ProviderAccount"] = {
       id,
       provider: body.name,
@@ -909,6 +1027,7 @@ const handlers = [
       email: null,
       status: "active",
       disabled: false,
+      proxy: shownProxy(body.proxy),
       lastError: null,
       lastRefreshedAt: null,
       quota: [],
@@ -917,7 +1036,7 @@ const handlers = [
         baseURL: body.baseURL.replace(/\/+$/, ""),
         ...(body.prefix === undefined ? {} : { prefix: body.prefix }),
         hasApiKey: (body.apiKey ?? "") !== "",
-        models: body.models,
+        models,
       },
     };
     accounts = [...accounts, account];
@@ -927,10 +1046,15 @@ const handlers = [
     const body = await request.json();
     const account = accounts.find((a) => a.id === params.accountId);
     if (account?.compat === undefined) return response.untyped(notFound());
+    const refused = proxyRefusal(body.proxy);
+    if (refused !== null) return response(422).json({ code: "invalid_input", message: "", field: refused });
+    const models = withReasoningLevels(body.models);
+    if (models === null) return response(422).json({ code: "invalid_input", message: "", field: "models" });
     const hasApiKey = body.apiKey !== undefined ? body.apiKey !== "" : body.clearApiKey ? false : account.compat.hasApiKey;
     const updated: Schemas["ProviderAccount"] = {
       ...account,
-      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models: body.models },
+      proxy: body.proxy === undefined ? account.proxy : shownProxy(body.proxy),
+      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models },
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);

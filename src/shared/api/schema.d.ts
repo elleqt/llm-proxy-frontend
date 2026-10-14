@@ -487,6 +487,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/providers/compat/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The defaults an OpenAI-compatible provider's form starts from. */
+        get: operations["getCompatDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/providers/compat/discover": {
         parameters: {
             query?: never;
@@ -496,7 +513,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** List the models a vendor serves (GET {baseURL}/models). Nothing is saved. Without `apiKey`, the stored key of `accountId` is used, and only when `baseURL` is that provider's own: for any other URL the answer is `invalid_input` on `apiKey`, and nothing is sent. */
+        /** List the models a vendor serves (GET {baseURL}/models). Nothing is saved. Without `apiKey`, the stored key of `accountId` is used, and only when `baseURL` is that provider's own: for any other URL, if the provider has a stored key, the answer is `invalid_input` on `apiKey`, and nothing is sent. The request goes through `proxy`, else the proxy of `accountId`, else the global one. */
         post: operations["discoverCompatModels"];
         delete?: never;
         options?: never;
@@ -889,6 +906,7 @@ export interface components {
              */
             status: string;
             disabled: boolean;
+            proxy: components["schemas"]["AccountProxy"];
             lastError?: string | null;
             /** Format: date-time */
             lastRefreshedAt?: string | null;
@@ -913,6 +931,12 @@ export interface components {
             name: string;
             /** @description The name clients request it by; absent serves it as `name`. */
             alias?: string;
+            /** @description The `reasoning_effort` values passed to the vendor unchanged. A standard level off the list becomes the nearest listed one, so the vendor does not reject it; an unknown value off the list is refused. Known levels are kept in canonical order. Absent: the default set (`CompatDefaults`). Responses carry it only for a model's own list. */
+            reasoningLevels?: string[];
+        };
+        CompatDefaults: {
+            /** @description The reasoning levels a model without its own list passes unchanged. */
+            reasoningLevels: string[];
         };
         CompatProviderDetails: {
             name: string;
@@ -921,6 +945,24 @@ export interface components {
             /** @description Whether a key is stored. The key itself is never returned. */
             hasApiKey: boolean;
             models: components["schemas"]["CompatModel"][];
+        };
+        /** @description How the account's vendor traffic leaves the gateway. `inherit` uses the global `proxyURL` setting (direct when it is empty), `direct` bypasses it, `custom` uses the account's own proxy. */
+        AccountProxy: {
+            /** @enum {string} */
+            mode: "inherit" | "direct" | "custom";
+            /** @description `custom` only: the proxy's scheme, host and port. Userinfo, path and query are never returned. */
+            url?: string;
+            /** @description `custom` only: whether the stored URL carries a user name or password. */
+            hasCredentials?: boolean;
+        };
+        AccountProxyInput: {
+            /** @enum {string} */
+            mode: "inherit" | "direct" | "custom";
+            /**
+             * @description Required for `custom` and refused otherwise: the whole proxy URL, credentials included (`http`, `https`, `socks5` or `socks5h`). Replaces the stored one.
+             * @example http://user:password@proxy.example.com:3128
+             */
+            url?: string;
         };
         CompatProviderRequest: {
             /** @description The policy provider name; immutable. Stored in lower case (upstream matches names case-insensitively), then it must match `^[a-z0-9][a-z0-9._-]{0,62}$`. */
@@ -932,6 +974,8 @@ export interface components {
             /** @description Optional model prefix: clients request `prefix/model`. */
             prefix?: string;
             models: components["schemas"]["CompatModel"][];
+            /** @description Absent is `inherit`. */
+            proxy?: components["schemas"]["AccountProxyInput"];
         };
         CompatProviderUpdate: {
             baseURL: string;
@@ -944,12 +988,16 @@ export interface components {
             clearApiKey: boolean;
             prefix?: string;
             models: components["schemas"]["CompatModel"][];
+            /** @description Absent keeps the stored proxy. */
+            proxy?: components["schemas"]["AccountProxyInput"];
         };
         CompatDiscoverRequest: {
             baseURL: string;
             apiKey?: string;
-            /** @description An existing provider whose stored key is used when `apiKey` is absent. */
+            /** @description An existing provider whose stored key is used when `apiKey` is absent, and whose proxy is used when `proxy` is absent. */
             accountId?: string;
+            /** @description The proxy to ask through. Absent, the proxy of `accountId`, else the global one. */
+            proxy?: components["schemas"]["AccountProxyInput"];
         };
         CompatDiscoverResult: {
             models: string[];
@@ -2215,6 +2263,26 @@ export interface operations {
             };
         };
     };
+    getCompatDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The default set of reasoning levels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompatDefaults"];
+                };
+            };
+        };
+    };
     discoverCompatModels: {
         parameters: {
             query?: never;
@@ -2291,7 +2359,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    disabled: boolean;
+                    disabled?: boolean;
+                    proxy?: components["schemas"]["AccountProxyInput"];
                 };
             };
         };
@@ -2303,6 +2372,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description `invalid_input` — no field given (no `field`), or `field` `proxy.mode` / `proxy.url`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

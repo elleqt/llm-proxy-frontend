@@ -15,14 +15,15 @@ This is the web interface of llm-proxy, a self-hosted gateway that lets a team s
 
 ## Screenshots
 
-All screenshots use the in-browser mock API (`VITE_MOCK_API=1`, see [Development](#development)); every name, address and number in them is made up.
+All screenshots use the in-browser mock API (`VITE_MOCK_API=1`, see [Development](#development)); every name, address and number in them is made up. They show the dark theme, except the last one.
 
 | | |
 |---|---|
 | [![Sign-in page](docs/screenshots/login.png)](docs/screenshots/login.png)<br>Sign-in: password or the identity-provider button. | [![Cabinet](docs/screenshots/cabinet.png)](docs/screenshots/cabinet.png)<br>Cabinet: API keys, usage, spend limits with the share of each used, available models. |
 | [![Connect page](docs/screenshots/connect.png)](docs/screenshots/connect.png)<br>Connect: copy-paste configuration for Claude Code, omp and curl. | [![Users](docs/screenshots/admin-users.png)](docs/screenshots/admin-users.png)<br>Admin, users: people and service accounts, sign-in methods, access rules, status. |
-| [![User card](docs/screenshots/admin-user.png)](docs/screenshots/admin-user.png)<br>Admin, one user: access rules with the models they cover, spend limits with their windows, keys, recent requests with cost, audit events. | [![Providers](docs/screenshots/admin-providers.png)](docs/screenshots/admin-providers.png)<br>Admin, providers: vendor accounts, errors, quota windows and when they reset. |
-| [![Settings](docs/screenshots/admin-settings.png)](docs/screenshots/admin-settings.png)<br>Admin, settings: gateway settings, whether users see their costs, the price list with the catalog status, default spend limits. | [![Cabinet, dark theme, Russian](docs/screenshots/cabinet-dark-ru.png)](docs/screenshots/cabinet-dark-ru.png)<br>The cabinet in the dark theme, in Russian, with costs shown. |
+| [![User card](docs/screenshots/admin-user.png)](docs/screenshots/admin-user.png)<br>Admin, one user: access rules with the models they cover, spend limits with their windows, keys, recent requests with cost, audit events. | [![Providers](docs/screenshots/admin-providers.png)](docs/screenshots/admin-providers.png)<br>Admin, providers: subscriptions with their quota windows, OpenAI-compatible providers with their models, each account's proxy. |
+| [![Editing a provider](docs/screenshots/admin-provider-edit.png)](docs/screenshots/admin-provider-edit.png)<br>Admin, editing an OpenAI-compatible provider: connection, stored key, proxy, models with aliases. | [![Settings](docs/screenshots/admin-settings.png)](docs/screenshots/admin-settings.png)<br>Admin, settings: gateway settings, whether users see their costs, the price list with the catalog status, default spend limits. |
+| [![Cabinet, light theme](docs/screenshots/cabinet-light.png)](docs/screenshots/cabinet-light.png)<br>The cabinet in the light theme. | |
 
 ## Running it
 
