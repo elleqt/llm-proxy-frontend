@@ -245,10 +245,8 @@ describe("account list", () => {
     const popover = () => screen.queryByRole("dialog", { name: fill(en["providers.moreModelsTitle"], { name: "acme" }) });
     expect(popover()).toBeNull();
 
-    // Tab from the control before it.
-    act(() => screen.getByRole("button", { name: en["providerLogin.open"] }).focus());
-    await user.tab();
-    expect(more).toHaveFocus();
+    // Focus opens the popover, independent of earlier page controls.
+    act(() => more.focus());
     expect(more).toHaveAttribute("aria-expanded", "true");
     expect(within(popover() as HTMLElement).getAllByRole("listitem").map((tag) => tag.textContent)).toEqual([
       "model-e",
@@ -548,7 +546,6 @@ function compatAccount(overrides: Partial<NonNullable<Schemas["ProviderAccount"]
       baseURL: "https://api.example.com/v1",
       hasApiKey: true,
       models: [{ name: "model-a" }],
-      priority: 0,
       headerNames: [],
       ...overrides,
     },

@@ -31,7 +31,7 @@ describe("StatusDot", () => {
     const shown = dot(
       fixtures.providerAccount({
         disabled: true,
-        compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: false, models: [], priority: 0, headerNames: [] },
+        compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: false, models: [], headerNames: [] },
       }),
     );
 

@@ -906,6 +906,11 @@ export interface components {
              */
             status: string;
             disabled: boolean;
+            /**
+             * Format: int32
+             * @description Effective shared routing priority; absent stored configuration is neutral (zero).
+             */
+            priority: number;
             proxy: components["schemas"]["AccountProxy"];
             lastError?: string | null;
             /** Format: date-time */
@@ -948,8 +953,6 @@ export interface components {
             prefix?: string;
             /** @description Whether a key is stored. The key itself is never returned. */
             hasApiKey: boolean;
-            /** Format: int32 */
-            priority: number;
             /** @description Stored header names only; values are never returned. */
             headerNames: string[];
             models: components["schemas"]["CompatModel"][];
@@ -2382,6 +2385,11 @@ export interface operations {
                 "application/json": {
                     disabled?: boolean;
                     proxy?: components["schemas"]["AccountProxyInput"];
+                    /**
+                     * Format: int32
+                     * @description Routing priority for any account type. Omission preserves its current value.
+                     */
+                    priority?: number;
                 };
             };
         };

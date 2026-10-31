@@ -8,9 +8,11 @@ import { fixtures, http, server, type Schemas } from "../../test/server";
 import { CompatDrawer } from "./CompatDrawer";
 
 type Compat = NonNullable<Schemas["ProviderAccount"]["compat"]>;
+type CompatOverrides = Partial<Compat> & Pick<Partial<Schemas["ProviderAccount"]>, "priority">;
 
 /** The drawer of a stored provider with a key and the given models; collects the PUT bodies. */
-function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["proxy"] = { mode: "inherit" }, overrides: Partial<Compat> = {}) {
+function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["proxy"] = { mode: "inherit" }, overrides: CompatOverrides = {}) {
+  const { priority = 0, ...details } = overrides;
   const sent: Schemas["CompatProviderUpdate"][] = [];
   const account = fixtures.providerAccount({
     id: "openai-compatible-acme",
@@ -19,7 +21,8 @@ function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["pro
     email: null,
     quota: [],
     proxy,
-    compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: true, models, priority: 0, headerNames: [], ...overrides },
+    priority,
+    compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: true, models, headerNames: [], ...details },
   });
   server.use(
     http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
@@ -335,10 +338,7 @@ describe("CompatDrawer API key", () => {
 describe("CompatDrawer routing settings", () => {
   it("changes priority without replacing stored secret headers", async () => {
     const { user, sent, onClose } = drawer([{ name: "model-a" }], { mode: "inherit" }, { priority: 7, headerNames: ["x-token"] });
-    await user.click(advanced());
-    const priority = within(dialog()).getByLabelText("Priority");
-    await user.clear(priority);
-    await user.type(priority, "0");
+    await user.selectOptions(within(dialog()).getByRole("combobox", { name: en["routing.role"] }), "0");
     await user.click(save());
     const body = await savedBody(sent, onClose);
     expect(body?.priority).toBe(0);
@@ -390,13 +390,13 @@ describe("CompatDrawer routing settings", () => {
 describe("CompatDrawer routing boundaries", () => {
   it.each(["1.5", "2147483648", "-2147483649"])("rejects invalid priority %s before saving", async (value) => {
     const { user, sent } = drawer([{ name: "model-a" }]);
-    await user.click(advanced());
-    const priority = within(dialog()).getByLabelText(en["compat.priority"]);
+    await user.click(within(dialog()).getByText(en["routing.advanced"]));
+    const priority = within(dialog()).getByLabelText(en["routing.priority"]);
     await user.clear(priority);
     await user.type(priority, value);
     await user.click(save());
     expect(sent).toEqual([]);
-    expect(within(dialog()).getByText(en["compat.priorityInvalid"])).toBeVisible();
+    expect(within(dialog()).getByText(en["routing.priorityInvalid"])).toBeVisible();
   });
 
   it("rejects case-insensitive duplicate header rows instead of overwriting a value", async () => {

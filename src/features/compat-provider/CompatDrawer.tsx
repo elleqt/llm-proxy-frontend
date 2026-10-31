@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AccountRoutingFields, priorityValue } from "../../entities/provider/AccountRoutingFields";
 import { compatDefaultsQuery, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { StatusDot } from "../../entities/provider/StatusDot";
 import { ApiError, client, unwrap } from "../../shared/api/client";
@@ -68,7 +69,9 @@ export function CompatDrawer({
   const [clearKey, setClearKey] = useState(false);
   const [keyReplacing, setKeyReplacing] = useState(false);
   const [prefix, setPrefix] = useState(existing?.prefix ?? "");
-  const [priority, setPriority] = useState(String(existing?.priority ?? 0));
+  const [priorityDraft, setPriorityDraft] = useState<string | null>(null);
+  const priority = priorityDraft ?? String(account?.priority ?? 0);
+  const priorityEdited = priorityDraft !== null && priority !== String(account?.priority ?? 0);
   const [priorityError, setPriorityError] = useState(false);
   const [headers, setHeaders] = useState<HeadersDraft>({ mode: "keep" });
   const [headersError, setHeadersError] = useState(false);
@@ -126,7 +129,7 @@ export function CompatDrawer({
     name !== (existing?.name ?? "") ||
     baseURL !== (existing?.baseURL ?? "") ||
     prefix !== (existing?.prefix ?? "") ||
-    priority !== String(existing?.priority ?? 0) ||
+    priorityEdited ||
     headers.mode !== "keep" ||
     apiKey !== "" ||
     clearKey ||
@@ -153,7 +156,7 @@ export function CompatDrawer({
         const body: CreateRequest = { name: name.trim(), baseURL: baseURL.trim(), models, proxy: proxyInput(proxy) };
         if (key !== "") body.apiKey = key;
         if (prefix.trim() !== "") body.prefix = prefix.trim();
-        if (Number(priority) !== 0) body.priority = Number(priority);
+        if (priorityEdited) body.priority = priorityValue(priority)!;
         if (suppliedHeaders !== undefined) body.headers = suppliedHeaders;
         return unwrap(client.POST("/api/admin/providers/compat", { body }));
       }
@@ -165,7 +168,7 @@ export function CompatDrawer({
       };
       if (key !== "") body.apiKey = key;
       if (proxyEdited) body.proxy = proxyInput(proxy);
-      if (Number(priority) !== (existing?.priority ?? 0)) body.priority = Number(priority);
+      if (priorityEdited) body.priority = priorityValue(priority)!;
       if (suppliedHeaders !== undefined) body.headers = suppliedHeaders;
       return unwrap(
         client.PUT("/api/admin/providers/compat/{accountId}", { params: { path: { accountId: account.id } }, body }),
@@ -173,7 +176,7 @@ export function CompatDrawer({
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey }),
     onError: (error) => {
-      if (error instanceof ApiError && (error.field === "headers" || error.field === "priority")) setAdvancedOpen(true);
+      if (error instanceof ApiError && error.field === "headers") setAdvancedOpen(true);
     },
     gcTime: 0,
   });
@@ -223,8 +226,7 @@ export function CompatDrawer({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (defaultLevels === undefined || initialLevels === undefined) return;
-    const badPriority = priority.trim() === "" || !Number.isInteger(Number(priority)) ||
-      Number(priority) < -2147483648 || Number(priority) > 2147483647;
+    const badPriority = priorityValue(priority) === undefined;
     const badHeaders = !validHeaders(headers);
     setPriorityError(badPriority);
     setHeadersError(badHeaders);
@@ -456,6 +458,9 @@ export function CompatDrawer({
               error={onField("prefix")}
             />
           </section>
+          <AccountRoutingFields value={priority}
+            onChange={(value) => { setPriorityDraft(value); setPriorityError(false); }}
+            error={priorityError ? t("routing.priorityInvalid") : onField("priority")} />
 
           <ProxySection
             value={proxy}
@@ -603,17 +608,6 @@ export function CompatDrawer({
               </button>
             </h3>
             <div id={advancedId} hidden={!advancedOpen}>
-              <TextField
-                label={t("compat.priority")}
-                hint={t("compat.priorityHint")}
-                type="number"
-                step="1"
-                min="-2147483648"
-                max="2147483647"
-                value={priority}
-                onChange={(event) => { setPriority(event.target.value); setPriorityError(false); }}
-                error={priorityError ? t("compat.priorityInvalid") : onField("priority")}
-              />
               <CompatHeaders
                 draft={headers}
                 names={storedHeaderNames}

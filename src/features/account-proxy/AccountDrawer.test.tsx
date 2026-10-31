@@ -83,3 +83,32 @@ describe("AccountDrawer", () => {
     expect(sent).toEqual([{ proxy: { mode: "custom", url: "http://user:pw@other.example.com:8080" } }]);
   });
 });
+
+describe("subscription routing draft", () => {
+  it("changes the role without resending a stored credential-bearing proxy", async () => {
+    const sent: unknown[] = [];
+    server.use(http.patch("/api/admin/providers/{accountId}", async ({ request, response }) => {
+      sent.push(await request.json());
+      return response(200).json(fixtures.providerAccount({ priority: -1 }));
+    }));
+    const { user, onClose } = drawer();
+    await user.selectOptions(screen.getByRole("combobox", { name: en["routing.role"] }), "-1");
+    await user.click(save());
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(sent).toEqual([{ priority: -1 }]);
+  });
+
+  it("refuses a fractional custom priority before sending a change", async () => {
+    const { user } = drawer();
+    await user.click(screen.getByText(en["routing.advanced"]));
+    const priority = screen.getByLabelText(en["routing.priority"]);
+    await user.clear(priority);
+    await user.type(priority, "1.5");
+    await user.click(save());
+    expect(screen.getByText(en["routing.priorityInvalid"])).toBeVisible();
+    await user.clear(priority);
+    await user.type(priority, "7");
+    expect(priority).toBeVisible();
+    expect(priority).toHaveValue(7);
+  });
+});
