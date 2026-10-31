@@ -295,6 +295,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "ops@example.com",
     status: "active",
     disabled: false,
+    priority: 0,
     proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(40 * 60_000),
@@ -320,6 +321,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "team@example.com",
     status: "error",
     disabled: false,
+    priority: 0,
     // A long host: the list fades its tail and shows it in full on hover or focus.
     proxy: { mode: "custom", url: "socks5://egress-gateway.corp.example.com:1080", hasCredentials: true },
     lastError: "refresh token rejected (401)",
@@ -339,6 +341,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: "research-team-shared-account@subdivision.example.com",
     status: "active",
     disabled: false,
+    priority: 0,
     proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: ago(3 * HOUR),
@@ -359,6 +362,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: null,
     status: "disabled",
     disabled: true,
+    priority: 0,
     proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: null,
@@ -371,6 +375,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: null,
     status: "active",
     disabled: false,
+    priority: 0,
     proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: null,
@@ -379,6 +384,7 @@ let accounts: Schemas["ProviderAccount"][] = [
       name: "deepseek",
       baseURL: "https://api.deepseek.example.com/v1",
       hasApiKey: true,
+      headerNames: [],
       // More than four: the list shows four and "+2".
       models: [
         { name: "deepseek-flash" },
@@ -397,11 +403,12 @@ let accounts: Schemas["ProviderAccount"][] = [
     email: null,
     status: "active",
     disabled: false,
+    priority: 0,
     proxy: { mode: "direct" },
     lastError: null,
     lastRefreshedAt: null,
     quota: [],
-    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }] },
+    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }], headerNames: [] },
   },
 ];
 const loginSessions = new Map<string, { provider: string; expiresAt: number }>();
@@ -963,6 +970,7 @@ const handlers = [
       email: `new${n}@example.com`,
       status: "active",
       disabled: false,
+      priority: 0,
       proxy: { mode: "inherit" },
       lastError: null,
       lastRefreshedAt: new Date().toISOString(),
@@ -972,10 +980,10 @@ const handlers = [
     return response(201).json(account);
   }),
   http.patch("/api/admin/providers/{accountId}", async ({ params, request, response }) => {
-    const { disabled, proxy } = await request.json();
+    const { disabled, proxy, priority } = await request.json();
     const account = accounts.find((a) => a.id === params.accountId);
     if (account === undefined) return response.untyped(notFound());
-    if (disabled === undefined && proxy === undefined) {
+    if (disabled === undefined && proxy === undefined && priority === undefined) {
       return response(422).json({ code: "invalid_input", message: "" });
     }
     const refused = proxyRefusal(proxy);
@@ -984,6 +992,7 @@ const handlers = [
       ...account,
       ...(disabled === undefined ? {} : { disabled, status: disabled ? "disabled" : "active" }),
       ...(proxy === undefined ? {} : { proxy: shownProxy(proxy) }),
+      ...(priority === undefined ? {} : { priority }),
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);
@@ -1027,6 +1036,7 @@ const handlers = [
       email: null,
       status: "active",
       disabled: false,
+      priority: body.priority ?? 0,
       proxy: shownProxy(body.proxy),
       lastError: null,
       lastRefreshedAt: null,
@@ -1037,6 +1047,7 @@ const handlers = [
         ...(body.prefix === undefined ? {} : { prefix: body.prefix }),
         hasApiKey: (body.apiKey ?? "") !== "",
         models,
+        headerNames: Object.keys(body.headers ?? {}).map((name) => name.toLowerCase()).sort(),
       },
     };
     accounts = [...accounts, account];
@@ -1054,7 +1065,11 @@ const handlers = [
     const updated: Schemas["ProviderAccount"] = {
       ...account,
       proxy: body.proxy === undefined ? account.proxy : shownProxy(body.proxy),
-      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models },
+      priority: body.priority ?? account.priority,
+      compat: {
+        ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models,
+        headerNames: body.headers === undefined ? account.compat.headerNames : Object.keys(body.headers).map((name) => name.toLowerCase()).sort(),
+      },
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);

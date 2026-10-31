@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { AccountRoutingFields, priorityValue } from "../../entities/provider/AccountRoutingFields";
 import { accountName, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { QuotaMeters } from "../../entities/provider/QuotaMeters";
 import { accountStatus, refreshedAt, StatusDot } from "../../entities/provider/StatusDot";
@@ -31,15 +32,23 @@ export function AccountDrawer({
   const queryClient = useQueryClient();
   const formId = useId();
   const [draft, setDraft] = useState(() => sectionDraft(account.proxy));
-  const changed = proxyChanged(draft, account.proxy);
-  const guard = useDiscardGuard(proxyDirty(draft, account.proxy), onClose);
+  const [priorityDraft, setPriorityDraft] = useState<string | null>(null);
+  const [priorityError, setPriorityError] = useState(false);
+  const priority = priorityDraft ?? String(account.priority);
+  const priorityEdited = priorityDraft !== null && priority !== String(account.priority);
+  const proxyEdited = proxyChanged(draft, account.proxy);
+  const changed = proxyEdited || priorityEdited;
+  const guard = useDiscardGuard(proxyDirty(draft, account.proxy) || priorityEdited, onClose);
   // gcTime 0: a typed URL may carry the proxy's password; it leaves no cache behind.
   const save = useMutation({
     mutationFn: () =>
       unwrap(
         client.PATCH("/api/admin/providers/{accountId}", {
           params: { path: { accountId: account.id } },
-          body: { proxy: proxyInput(draft) },
+          body: {
+            ...(proxyEdited ? { proxy: proxyInput(draft) } : {}),
+            ...(priorityEdited ? { priority: priorityValue(priority)! } : {}),
+          },
         }),
       ),
     onSuccess: async () => {
@@ -51,6 +60,10 @@ export function AccountDrawer({
   const error = save.error instanceof ApiError ? save.error : null;
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (priorityValue(priority) === undefined) {
+      setPriorityError(true);
+      return;
+    }
     save.mutate();
   };
   const status = accountStatus(account, t);
@@ -96,6 +109,9 @@ export function AccountDrawer({
               </dd>
             </dl>
           </section>
+          <AccountRoutingFields value={priority}
+            onChange={(value) => { setPriorityDraft(value); setPriorityError(false); }}
+            error={priorityError ? t("routing.priorityInvalid") : error?.field === "priority" ? errorMessage(error) : undefined} />
           <ProxySection
             value={draft}
             onChange={setDraft}

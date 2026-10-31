@@ -7,6 +7,8 @@ import { AccountDrawer } from "../../../features/account-proxy/AccountDrawer";
 import { ProxyCell } from "../../../features/account-proxy/ProxyCell";
 import { CompatDrawer } from "../../../features/compat-provider/CompatDrawer";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
+import { AccountUsageControl } from "../../../features/provider-routing/AccountUsageControl";
+import { SessionAffinityControl } from "../../../features/provider-routing/SessionAffinityControl";
 import { client, unwrap } from "../../../shared/api/client";
 import type { components } from "../../../shared/api/schema";
 import { useErrorMessage, useT } from "../../../shared/i18n";
@@ -48,6 +50,7 @@ export function AdminProvidersPage() {
         </div>
         {addingCompat && <CompatDrawer onClose={() => setAddingCompat(false)} />}
       </div>
+      <SessionAffinityControl />
       {accounts.isPending ? (
         <Spinner label={t("app.loading")} />
       ) : accounts.isError ? (
@@ -59,7 +62,7 @@ export function AdminProvidersPage() {
           {subscriptions.length > 0 && (
             <Group
               title={t("providers.subscriptions")}
-              columns={[t("providers.account"), t("providers.quota"), t("proxy.column")]}
+              columns={[t("providers.account"), t("providers.quota"), t("proxy.column"), t("routing.role")]}
               accounts={subscriptions}
               now={now}
               returnFocus={headingRef}
@@ -68,7 +71,7 @@ export function AdminProvidersPage() {
           {compat.length > 0 && (
             <Group
               title={t("providers.compatGroup")}
-              columns={[t("providers.provider"), t("compat.models"), t("proxy.column")]}
+              columns={[t("providers.provider"), t("compat.models"), t("proxy.column"), t("routing.role")]}
               accounts={compat}
               now={now}
               returnFocus={headingRef}
@@ -156,6 +159,9 @@ function AccountRow({
       </div>
       <div className={styles.proxy}>
         <ProxyCell proxy={account.proxy} />
+      </div>
+      <div className={styles.routing}>
+        <AccountUsageControl account={account} />
       </div>
       <div className={styles.actions}>
         <EnabledToggle account={account} />

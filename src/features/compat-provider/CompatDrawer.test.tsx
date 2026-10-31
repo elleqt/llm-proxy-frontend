@@ -3,13 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { en } from "../../shared/i18n/en";
 import { renderWithClient } from "../../test/render";
+import { cached } from "../../test/cache";
 import { fixtures, http, server, type Schemas } from "../../test/server";
 import { CompatDrawer } from "./CompatDrawer";
 
 type Compat = NonNullable<Schemas["ProviderAccount"]["compat"]>;
+type CompatOverrides = Partial<Compat> & Pick<Partial<Schemas["ProviderAccount"]>, "priority">;
 
 /** The drawer of a stored provider with a key and the given models; collects the PUT bodies. */
-function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["proxy"] = { mode: "inherit" }) {
+function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["proxy"] = { mode: "inherit" }, overrides: CompatOverrides = {}) {
+  const { priority = 0, ...details } = overrides;
   const sent: Schemas["CompatProviderUpdate"][] = [];
   const account = fixtures.providerAccount({
     id: "openai-compatible-acme",
@@ -18,7 +21,8 @@ function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["pro
     email: null,
     quota: [],
     proxy,
-    compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: true, models },
+    priority,
+    compat: { name: "acme", baseURL: "https://api.example.com/v1", hasApiKey: true, models, headerNames: [], ...details },
   });
   server.use(
     http.put("/api/admin/providers/compat/{accountId}", async ({ request, response }) => {
@@ -27,8 +31,8 @@ function drawer(models: Compat["models"], proxy: Schemas["ProviderAccount"]["pro
     }),
   );
   const onClose = vi.fn();
-  renderWithClient(<CompatDrawer account={account} onClose={onClose} removeAction={null} />);
-  return { sent, onClose, user: userEvent.setup() };
+  const view = renderWithClient(<CompatDrawer account={account} onClose={onClose} removeAction={null} />);
+  return { ...view, sent, onClose, user: userEvent.setup() };
 }
 
 const dialog = () => screen.getByRole("dialog", { name: "acme" });
@@ -328,5 +332,126 @@ describe("CompatDrawer API key", () => {
       clearApiKey: false,
       apiKey: KEY,
     });
+  });
+});
+
+describe("CompatDrawer routing settings", () => {
+  it("changes priority without replacing stored secret headers", async () => {
+    const { user, sent, onClose } = drawer([{ name: "model-a" }], { mode: "inherit" }, { priority: 7, headerNames: ["x-token"] });
+    await user.selectOptions(within(dialog()).getByRole("combobox", { name: en["routing.role"] }), "0");
+    await user.click(save());
+    const body = await savedBody(sent, onClose);
+    expect(body?.priority).toBe(0);
+    expect(body?.headers).toBeUndefined();
+  });
+
+  it("removes saved headers without reading their values", async () => {
+    const { user, sent, onClose } = drawer([{ name: "model-a" }], { mode: "inherit" }, { headerNames: ["x-token"] });
+    await user.click(advanced());
+    await user.click(within(dialog()).getByRole("button", { name: "Remove all headers" }));
+    await user.click(save());
+    expect((await savedBody(sent, onClose))?.headers).toEqual({});
+  });
+
+  it("replaces the complete header map", async () => {
+    const { user, sent, onClose } = drawer([{ name: "model-a" }], { mode: "inherit" }, { headerNames: ["x-old"] });
+    await user.click(advanced());
+    await user.click(within(dialog()).getByRole("button", { name: "Replace headers" }));
+    await user.type(within(dialog()).getByLabelText("Header name 1"), "X-Token");
+    await user.type(within(dialog()).getByLabelText("Header value 1"), "new-header-secret");
+    await user.click(save());
+    expect((await savedBody(sent, onClose))?.headers).toEqual({ "x-token": "new-header-secret" });
+  });
+
+  it("keeps saved headers after canceling replacement", async () => {
+    const { user, sent, onClose } = drawer([{ name: "model-a" }], { mode: "inherit" }, { headerNames: ["x-token"] });
+    await user.click(advanced());
+    await user.click(within(dialog()).getByRole("button", { name: "Replace headers" }));
+    await user.type(within(dialog()).getByLabelText("Header value 1"), "discarded-secret");
+    await user.click(within(dialog()).getByRole("button", { name: "Keep stored headers" }));
+    expect(within(dialog()).getByRole("button", { name: "Replace headers" })).toHaveFocus();
+    await user.type(within(dialog()).getByLabelText(en["compat.prefix"]), "team");
+    await user.click(save());
+    expect((await savedBody(sent, onClose))?.headers).toBeUndefined();
+  });
+
+  it("does not carry saved header secrets to an edited URL even with a new key", async () => {
+    const { user, sent } = drawer([{ name: "model-a" }], { mode: "inherit" }, { hasApiKey: false, headerNames: ["x-token"] });
+    const baseURL = within(dialog()).getByLabelText(en["compat.baseURL"]);
+    await user.clear(baseURL);
+    await user.type(baseURL, "https://other.example.com/v1");
+    await user.type(within(dialog()).getByLabelText(en["compat.apiKey"]), "new-api-key");
+    await user.click(save());
+    expect(sent).toEqual([]);
+    expect(within(dialog()).getByText("Replace or remove the stored headers before changing the base URL.")).toBeVisible();
+  });
+});
+
+describe("CompatDrawer routing boundaries", () => {
+  it.each(["1.5", "2147483648", "-2147483649"])("rejects invalid priority %s before saving", async (value) => {
+    const { user, sent } = drawer([{ name: "model-a" }]);
+    await user.click(within(dialog()).getByText(en["routing.advanced"]));
+    const priority = within(dialog()).getByLabelText(en["routing.priority"]);
+    await user.clear(priority);
+    await user.type(priority, value);
+    await user.click(save());
+    expect(sent).toEqual([]);
+    expect(within(dialog()).getByText(en["routing.priorityInvalid"])).toBeVisible();
+  });
+
+  it("rejects case-insensitive duplicate header rows instead of overwriting a value", async () => {
+    const { user, sent } = drawer([{ name: "model-a" }]);
+    await user.click(advanced());
+    await user.click(within(dialog()).getByRole("button", { name: en["compat.headersAdd"] }));
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerName"]} 1`), "X-Token");
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerValue"]} 1`), "first-secret");
+    await user.click(within(dialog()).getByRole("button", { name: en["compat.headerAdd"] }));
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerName"]} 2`), "x-token");
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerValue"]} 2`), "second-secret");
+    await user.click(save());
+    expect(sent).toEqual([]);
+    expect(within(dialog()).getByText(en["compat.headersInvalid"])).toBeVisible();
+  });
+
+  it("keeps header drafts and manually selected models after discovery fails, then releases cached secrets on close", async () => {
+    server.use(http.post("/api/admin/providers/compat/discover", ({ response }) =>
+      response(502).json({ code: "provider_unreachable", message: "not shown" })));
+    const { user, sent, onClose, queryClient, unmount } = drawer([{ name: "model-a", alias: "public-model" }]);
+    await user.click(advanced());
+    await user.click(within(dialog()).getByRole("button", { name: en["compat.headersAdd"] }));
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerName"]} 1`), "x-token");
+    await user.type(within(dialog()).getByLabelText(`${en["compat.headerValue"]} 1`), "temporary-header-secret");
+    await user.click(within(dialog()).getByRole("button", { name: en["compat.refresh"] }));
+    await within(dialog()).findByText(en["error.provider_unreachable"]);
+    expect(within(dialog()).getByLabelText(`${en["compat.headerValue"]} 1`)).toHaveValue("temporary-header-secret");
+    await user.click(save());
+    const body = await savedBody(sent, onClose);
+    expect(body?.models).toEqual([{ name: "model-a", alias: "public-model" }]);
+    expect(body?.headers).toEqual({ "x-token": "temporary-header-secret" });
+    unmount();
+    await vi.waitFor(() => expect(cached(queryClient)).not.toContain("temporary-header-secret"));
+  });
+});
+
+describe("CompatDrawer discovery credential intent", () => {
+  it.each(["inherit", "direct"] as const)("does not rediscover with a removed stored key through %s headers", async (mode) => {
+    const requests: Schemas["CompatDiscoverRequest"][] = [];
+    server.use(http.post("/api/admin/providers/compat/discover", async ({ request, response }) => {
+      requests.push(await request.json());
+      return response(200).json({ models: ["model-a"], conflicts: {} });
+    }));
+    const { user } = drawer([{ name: "model-a" }], { mode }, { headerNames: ["x-token"] });
+    const keyGroup = () => within(dialog()).getByRole("group", { name: en["compat.apiKey"] });
+    await user.click(within(keyGroup()).getByRole("button", { name: en["compat.keyRemove"] }));
+    const refresh = within(dialog()).getByRole("button", { name: en["compat.refresh"] });
+    expect(refresh).toBeDisabled();
+    expect(requests).toEqual([]);
+    await user.click(within(keyGroup()).getByRole("button", { name: en["compat.keyReplace"] }));
+    await user.type(within(dialog()).getByLabelText(en["compat.apiKey"]), "explicit-replacement-key");
+    expect(refresh).toBeEnabled();
+    await user.click(refresh);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.apiKey).toBe("explicit-replacement-key");
+    expect(requests[0]?.accountId).toBe("openai-compatible-acme");
   });
 });

@@ -22,6 +22,10 @@ export const server = setupServer(
   ),
   http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.myLimits())),
   http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible: false })),
+  http.get("/api/admin/settings", ({ response }) => response(200).json({
+    yaml: "routing:\n  session-affinity: true\n",
+    fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30, sessionAffinity: true },
+  })),
   http.get("/api/admin/providers/compat/defaults", ({ response }) => response(200).json(fixtures.compatDefaults())),
 );
 
@@ -97,6 +101,7 @@ export const fixtures = {
     email: "ops@example.com",
     status: "active",
     disabled: false,
+    priority: 0,
     proxy: { mode: "inherit" },
     lastError: null,
     lastRefreshedAt: "2026-09-23T07:00:00Z",

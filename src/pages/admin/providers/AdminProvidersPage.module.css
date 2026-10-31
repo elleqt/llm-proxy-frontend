@@ -1,7 +1,10 @@
 /* The page, not the admin shell, is capped: other admin pages keep their width. */
 .page {
-  max-width: 60rem;
+  max-width: 74rem;
   margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 /* The rows switch to cards by the room the list has, not the viewport's (the admin shell takes some). */
@@ -34,8 +37,8 @@
 .head,
 .row {
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr) 12.5rem 7rem;
-  grid-template-areas: "who main proxy actions";
+  grid-template-columns: 12rem minmax(0, 1fr) 10rem 12rem 7rem;
+  grid-template-areas: "who main proxy routing actions";
   gap: 1rem;
   padding-inline: 1rem;
 }
@@ -83,6 +86,11 @@
   min-width: 0;
 }
 
+.routing {
+  grid-area: routing;
+  min-width: 0;
+}
+
 .actions {
   grid-area: actions;
   display: flex;
@@ -93,7 +101,7 @@
 }
 
 /* A disabled account steps back; its actions stay at full strength. */
-.row[data-disabled] > :not(.actions) {
+.row[data-disabled] > :not(.actions):not(.routing) {
   opacity: 0.55;
 }
 
@@ -199,6 +207,7 @@
   align-items: flex-start;
 }
 
+.routing label,
 .visuallyHidden {
   position: absolute;
   width: 1px;
@@ -209,11 +218,8 @@
 }
 
 /* The existing table card breakpoint: each row becomes a card, zones stacked, actions top-right. */
-/*
- * The fixed tracks take 38.5rem; below 50rem the quotas or models column would get under
- * about 11.5rem and its meters would spill into the proxy column.
- */
-@container (max-width: 50rem) {
+/* Stack before the model and quota tracks become too narrow. */
+@container (max-width: 65rem) {
   .head {
     display: none;
   }
@@ -223,7 +229,8 @@
     grid-template-areas:
       "who actions"
       "main main"
-      "proxy proxy";
+      "proxy proxy"
+      "routing routing";
     align-items: start;
     gap: 0.6rem 1rem;
   }

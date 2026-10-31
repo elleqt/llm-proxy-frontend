@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AccountRoutingFields, priorityValue } from "../../entities/provider/AccountRoutingFields";
 import { compatDefaultsQuery, providerAccountsQuery, type ProviderAccount } from "../../entities/provider/providers";
 import { StatusDot } from "../../entities/provider/StatusDot";
 import { ApiError, client, unwrap } from "../../shared/api/client";
@@ -22,6 +23,8 @@ import { proxyChanged, proxyDirty, proxyInput } from "../account-proxy/proxy";
 import styles from "./CompatDrawer.module.css";
 import { levelsInput, levelsKind, providerLevels, sameLevels } from "./levels";
 import { LEVELS_MARK, ReasoningLevels } from "./ReasoningLevels";
+import { CompatHeaders } from "./CompatHeaders";
+import { headersInput, validHeaders, type HeadersDraft } from "./headers";
 
 type CompatModel = components["schemas"]["CompatModel"];
 type CreateRequest = components["schemas"]["CompatProviderRequest"];
@@ -66,6 +69,15 @@ export function CompatDrawer({
   const [clearKey, setClearKey] = useState(false);
   const [keyReplacing, setKeyReplacing] = useState(false);
   const [prefix, setPrefix] = useState(existing?.prefix ?? "");
+  const [priorityDraft, setPriorityDraft] = useState<string | null>(null);
+  const priority = priorityDraft ?? String(account?.priority ?? 0);
+  const priorityEdited = priorityDraft !== null && priority !== String(account?.priority ?? 0);
+  const [priorityError, setPriorityError] = useState(false);
+  const [headers, setHeaders] = useState<HeadersDraft>({ mode: "keep" });
+  const [headersError, setHeadersError] = useState(false);
+  const storedHeaderNames = existing?.headerNames ?? [];
+  const headersMoved = headers.mode === "keep" && storedHeaderNames.length > 0 &&
+    baseURL.trim().replace(/\/+$/, "") !== existing?.baseURL.replace(/\/+$/, "");
   const [rows, setRows] = useState<ModelRow[]>(() =>
     (existing?.models ?? []).map((m) => ({ name: m.name, alias: m.alias ?? "", picked: true })),
   );
@@ -101,15 +113,14 @@ export function CompatDrawer({
   const storedKeyApplies =
     existing?.hasApiKey === true && !clearKey && baseURL.trim().replace(/\/+$/, "") === existing.baseURL.replace(/\/+$/, "");
   const keyNeeded = existing?.hasApiKey === true && !clearKey && !storedKeyApplies && apiKey.trim() === "";
-  // Discovery through a stored own proxy names the account, and the server then
-  // uses the stored key or refuses to go without one: a stored key that does not
-  // apply here (moved URL, or being removed) must be replaced by a typed one first.
-  const discoverBlocked =
-    account?.proxy.mode === "custom" &&
-    !proxyEdited &&
+  // Naming an account for its saved proxy or headers also selects its saved key.
+  // Do not use a key staged for removal while testing the future configuration.
+  const discoverBlocked = headersMoved || !validHeaders(headers) || (
+    ((account?.proxy.mode === "custom" && !proxyEdited) || (headers.mode === "keep" && storedHeaderNames.length > 0)) &&
     existing?.hasApiKey === true &&
     !storedKeyApplies &&
-    apiKey.trim() === "";
+    apiKey.trim() === ""
+  );
   // A stored key shows as its line until Replace swaps in the field; Remove marks it on the line.
   const keyMode = existing?.hasApiKey !== true ? "field" : clearKey ? "remove" : keyReplacing ? "replace" : "stored";
 
@@ -118,6 +129,8 @@ export function CompatDrawer({
     name !== (existing?.name ?? "") ||
     baseURL !== (existing?.baseURL ?? "") ||
     prefix !== (existing?.prefix ?? "") ||
+    priorityEdited ||
+    headers.mode !== "keep" ||
     apiKey !== "" ||
     clearKey ||
     // Offered rows left unpicked change nothing that is saved.
@@ -138,10 +151,13 @@ export function CompatDrawer({
   const save = useMutation({
     mutationFn: async (models: CompatModel[]) => {
       const key = apiKey.trim();
+      const suppliedHeaders = headersInput(headers);
       if (account === undefined) {
         const body: CreateRequest = { name: name.trim(), baseURL: baseURL.trim(), models, proxy: proxyInput(proxy) };
         if (key !== "") body.apiKey = key;
         if (prefix.trim() !== "") body.prefix = prefix.trim();
+        if (priorityEdited) body.priority = priorityValue(priority)!;
+        if (suppliedHeaders !== undefined) body.headers = suppliedHeaders;
         return unwrap(client.POST("/api/admin/providers/compat", { body }));
       }
       const body: UpdateRequest = {
@@ -152,15 +168,25 @@ export function CompatDrawer({
       };
       if (key !== "") body.apiKey = key;
       if (proxyEdited) body.proxy = proxyInput(proxy);
+      if (priorityEdited) body.priority = priorityValue(priority)!;
+      if (suppliedHeaders !== undefined) body.headers = suppliedHeaders;
       return unwrap(
         client.PUT("/api/admin/providers/compat/{accountId}", { params: { path: { accountId: account.id } }, body }),
       );
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: providerAccountsQuery.queryKey }),
+    onError: (error) => {
+      if (error instanceof ApiError && error.field === "headers") setAdvancedOpen(true);
+    },
     gcTime: 0,
   });
 
   const runDiscover = () => {
+    if (headersMoved || !validHeaders(headers)) {
+      setHeadersError(!validHeaders(headers));
+      setAdvancedOpen(true);
+      return;
+    }
     const body: DiscoverRequest = { baseURL: baseURL.trim() };
     if (apiKey.trim() !== "") body.apiKey = apiKey.trim();
     // Discovery goes through the proxy the provider will use. A stored own proxy's URL never
@@ -169,6 +195,9 @@ export function CompatDrawer({
     else if (account?.proxy.mode === "custom") body.accountId = account.id;
     else body.proxy = { mode: account?.proxy.mode ?? "inherit" };
     if (account !== undefined && apiKey.trim() === "" && storedKeyApplies) body.accountId = account.id;
+    const suppliedHeaders = headersInput(headers);
+    if (suppliedHeaders !== undefined) body.headers = suppliedHeaders;
+    if (account !== undefined && headers.mode === "keep" && storedHeaderNames.length > 0 && !headersMoved) body.accountId = account.id;
     discover.mutate(body, {
       onSuccess: (found) => {
         // Rows already there keep their choice and alias; new ones wait to be picked.
@@ -197,6 +226,14 @@ export function CompatDrawer({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (defaultLevels === undefined || initialLevels === undefined) return;
+    const badPriority = priorityValue(priority) === undefined;
+    const badHeaders = !validHeaders(headers);
+    setPriorityError(badPriority);
+    setHeadersError(badHeaders);
+    if (badPriority || badHeaders || headersMoved) {
+      setAdvancedOpen(true);
+      return;
+    }
     setPickError(pickedRows.length === 0);
     // An empty list would make upstream treat the models as non-thinking and strip the parameter.
     const levelsMissing = levels.touched && levels.list.length === 0;
@@ -225,7 +262,7 @@ export function CompatDrawer({
   const onField = (field: string) => (saveError?.field === field ? errorMessage(saveError) : undefined);
   const discoverError = discover.error instanceof ApiError ? discover.error : null;
   const fieldShown =
-    saveError?.field !== undefined && ["name", "baseURL", "apiKey", "prefix", "proxy.url"].includes(saveError.field);
+    saveError?.field !== undefined && ["name", "baseURL", "apiKey", "prefix", "proxy.url", "priority", "headers"].includes(saveError.field);
 
   // Focus follows the key controls as they swap: back to Replace, on to Undo, back to Remove.
   const keyFocus = useRef<"replace" | "undo" | "remove" | null>(null);
@@ -421,6 +458,9 @@ export function CompatDrawer({
               error={onField("prefix")}
             />
           </section>
+          <AccountRoutingFields value={priority}
+            onChange={(value) => { setPriorityDraft(value); setPriorityError(false); }}
+            error={priorityError ? t("routing.priorityInvalid") : onField("priority")} />
 
           <ProxySection
             value={proxy}
@@ -568,6 +608,13 @@ export function CompatDrawer({
               </button>
             </h3>
             <div id={advancedId} hidden={!advancedOpen}>
+              <CompatHeaders
+                draft={headers}
+                names={storedHeaderNames}
+                onChange={(draft) => { setHeaders(draft); setHeadersError(false); }}
+                error={headersMoved ? t("compat.headersNeedsReplacement") : headersError ? t("compat.headersInvalid") : onField("headers") ??
+                  (discoverError?.field === "headers" ? errorMessage(discoverError) : undefined)}
+              />
               {defaultLevels !== undefined && shownList !== undefined ? (
                 <ReasoningLevels
                   value={shownList}

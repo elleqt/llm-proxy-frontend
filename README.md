@@ -10,8 +10,21 @@ This is the web interface of llm-proxy, a self-hosted gateway that lets a team s
 
 - **Cabinet** — sign in with a password or through your OIDC identity provider; issue and revoke API keys; usage over 24 hours, 7 or 30 days in tokens, or also in dollars with the estimated cost split into input, output, cache reads and cache writes and what the prompt cache saved, when the administrator lets users see costs; your spend limits with the share of each used and when it resets; the models your access rules allow.
 - **Connect** — ready-made configuration for Claude Code, omp and curl (OpenAI-compatible API), filled in with the gateway's address.
-- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's spend limits (the defaults or their own) with one-click resets, keys, recent requests with cost, and audit events; vendor accounts with their quota usage, added through one **Add provider** button: a browser sign-in for Claude and ChatGPT, or an OpenAI-compatible provider with model discovery; gateway settings (outbound proxy, retries, sticky sessions) as fields or YAML with a server-side check before applying; the default spend limits and whether users see their costs; the price list, kept up to date from a public model catalog, with manual overrides.
+- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's spend limits, keys, recent requests and audit events; vendor accounts with quotas, usage roles and an immediate sticky-session switch; subscription sign-in or OpenAI-compatible model discovery through **Add provider**; outbound proxy and retries as fields or YAML with a server-side check before applying; default spend limits, cost visibility, and model prices.
 - English and Russian; four themes: system, light, pink, dark.
+
+### Account routing roles
+
+Every subscription and compatible account has a **Usage role** in its row: **Preferred**, **Normal** (the default), or **Reserve**. Changes save immediately. Accounts serving the same model use the highest available role; equal roles share new sessions through the configured strategy (round-robin by default). A second ChatGPT account starts as Normal and joins that pool. Both account editors retain custom signed priorities behind a disclosure without silently replacing existing values.
+
+The **Sticky sessions** switch is at the top of **Providers**, on by default, and saves immediately. Explicitly turning it off is preserved. Established sessions keep their available account despite role changes; failover can move them. This is the same setting as `routing.session-affinity` in Settings YAML, not an independent preference.
+
+Compatible secret HTTP headers remain in the editor's **Advanced** section.
+
+The editor shows saved header names, never their values. Keep them unchanged, replace the whole map, or remove it; changing the base URL requires explicitly replacing or removing the saved headers. Failed discovery leaves manually entered models and unsaved settings intact. Conversation-dependent header variables may be omitted during discovery, so some vendors need manual model entry.
+
+This supports [OpenCode Go with official DeepSeek fallback](https://github.com/elleqt/llm-proxy-backend#opencode-go-with-official-deepseek-fallback) without a separate provider type. Users keep ordinary DeepSeek client configuration against the gateway. Shared aliases still require access on every serving provider.
+
 
 ## Screenshots
 
