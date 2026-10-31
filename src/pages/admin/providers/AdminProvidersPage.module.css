@@ -207,6 +207,7 @@
   align-items: flex-start;
 }
 
+.routing label,
 .visuallyHidden {
   position: absolute;
   width: 1px;
