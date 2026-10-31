@@ -13,6 +13,15 @@ This is the web interface of llm-proxy, a self-hosted gateway that lets a team s
 - **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's spend limits (the defaults or their own) with one-click resets, keys, recent requests with cost, and audit events; vendor accounts with their quota usage, added through one **Add provider** button: a browser sign-in for Claude and ChatGPT, or an OpenAI-compatible provider with model discovery; gateway settings (outbound proxy, retries, sticky sessions) as fields or YAML with a server-side check before applying; the default spend limits and whether users see their costs; the price list, kept up to date from a public model catalog, with manual overrides.
 - English and Russian; four themes: system, light, pink, dark.
 
+### Prioritized OpenAI-compatible providers
+
+In a compatible provider's **Advanced** section, set its routing priority and secret HTTP headers. Higher priorities are preferred for shared model aliases; existing sticky-session bindings stay on their selected account until failover or binding expiry.
+
+The editor shows saved header names, never their values. Keep them unchanged, replace the whole map, or remove it; changing the base URL requires explicitly replacing or removing the saved headers. Failed discovery leaves manually entered models and unsaved settings intact. Conversation-dependent header variables may be omitted during discovery, so some vendors need manual model entry.
+
+This supports [OpenCode Go with official DeepSeek fallback](https://github.com/elleqt/llm-proxy-backend#opencode-go-with-official-deepseek-fallback) without a separate provider type. Users keep ordinary DeepSeek client configuration against the gateway. Shared aliases still require access on every serving provider.
+
+
 ## Screenshots
 
 All screenshots use the in-browser mock API (`VITE_MOCK_API=1`, see [Development](#development)); every name, address and number in them is made up. They show the dark theme, except the last one.

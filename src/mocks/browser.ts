@@ -379,6 +379,8 @@ let accounts: Schemas["ProviderAccount"][] = [
       name: "deepseek",
       baseURL: "https://api.deepseek.example.com/v1",
       hasApiKey: true,
+      priority: 0,
+      headerNames: [],
       // More than four: the list shows four and "+2".
       models: [
         { name: "deepseek-flash" },
@@ -401,7 +403,7 @@ let accounts: Schemas["ProviderAccount"][] = [
     lastError: null,
     lastRefreshedAt: null,
     quota: [],
-    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }] },
+    compat: { name: "ollama", baseURL: "http://llm.example.com:11434/v1", hasApiKey: false, models: [{ name: "qwen3.8-9b" }], priority: 0, headerNames: [] },
   },
 ];
 const loginSessions = new Map<string, { provider: string; expiresAt: number }>();
@@ -1037,6 +1039,8 @@ const handlers = [
         ...(body.prefix === undefined ? {} : { prefix: body.prefix }),
         hasApiKey: (body.apiKey ?? "") !== "",
         models,
+        priority: body.priority ?? 0,
+        headerNames: Object.keys(body.headers ?? {}).map((name) => name.toLowerCase()).sort(),
       },
     };
     accounts = [...accounts, account];
@@ -1054,7 +1058,11 @@ const handlers = [
     const updated: Schemas["ProviderAccount"] = {
       ...account,
       proxy: body.proxy === undefined ? account.proxy : shownProxy(body.proxy),
-      compat: { ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models },
+      compat: {
+        ...account.compat, baseURL: body.baseURL, prefix: body.prefix ?? "", hasApiKey, models,
+        priority: body.priority ?? account.compat.priority,
+        headerNames: body.headers === undefined ? account.compat.headerNames : Object.keys(body.headers).map((name) => name.toLowerCase()).sort(),
+      },
     };
     accounts = accounts.map((a) => (a.id === account.id ? updated : a));
     return response(200).json(updated);

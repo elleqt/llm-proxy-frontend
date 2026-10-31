@@ -548,6 +548,8 @@ function compatAccount(overrides: Partial<NonNullable<Schemas["ProviderAccount"]
       baseURL: "https://api.example.com/v1",
       hasApiKey: true,
       models: [{ name: "model-a" }],
+      priority: 0,
+      headerNames: [],
       ...overrides,
     },
   });

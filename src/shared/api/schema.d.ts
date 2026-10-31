@@ -938,12 +938,20 @@ export interface components {
             /** @description The reasoning levels a model without its own list passes unchanged. */
             reasoningLevels: string[];
         };
+        /** @description Secret custom HTTP headers. Omission preserves saved headers on update or discovery; an empty object removes them, and a nonempty object replaces the full map. Saved headers are bound to the provider's base URL. Unresolved dynamic values are omitted during model discovery; inference uses upstream header expansion. */
+        CompatHeaders: {
+            [key: string]: string;
+        };
         CompatProviderDetails: {
             name: string;
             baseURL: string;
             prefix?: string;
             /** @description Whether a key is stored. The key itself is never returned. */
             hasApiKey: boolean;
+            /** Format: int32 */
+            priority: number;
+            /** @description Stored header names only; values are never returned. */
+            headerNames: string[];
             models: components["schemas"]["CompatModel"][];
         };
         /** @description How the account's vendor traffic leaves the gateway. `inherit` uses the global `proxyURL` setting (direct when it is empty), `direct` bypasses it, `custom` uses the account's own proxy. */
@@ -973,6 +981,12 @@ export interface components {
             apiKey?: string;
             /** @description Optional model prefix: clients request `prefix/model`. */
             prefix?: string;
+            /**
+             * Format: int32
+             * @description Larger values are preferred; absent is zero.
+             */
+            priority?: number;
+            headers?: components["schemas"]["CompatHeaders"];
             models: components["schemas"]["CompatModel"][];
             /** @description Absent is `inherit`. */
             proxy?: components["schemas"]["AccountProxyInput"];
@@ -987,6 +1001,12 @@ export interface components {
              */
             clearApiKey: boolean;
             prefix?: string;
+            /**
+             * Format: int32
+             * @description Larger values are preferred; absent preserves the stored value.
+             */
+            priority?: number;
+            headers?: components["schemas"]["CompatHeaders"];
             models: components["schemas"]["CompatModel"][];
             /** @description Absent keeps the stored proxy. */
             proxy?: components["schemas"]["AccountProxyInput"];
@@ -994,6 +1014,7 @@ export interface components {
         CompatDiscoverRequest: {
             baseURL: string;
             apiKey?: string;
+            headers?: components["schemas"]["CompatHeaders"];
             /** @description An existing provider whose stored key is used when `apiKey` is absent, and whose proxy is used when `proxy` is absent. */
             accountId?: string;
             /** @description The proxy to ask through. Absent, the proxy of `accountId`, else the global one. */
