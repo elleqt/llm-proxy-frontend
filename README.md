@@ -25,6 +25,12 @@ The editor shows saved header names, never their values. Keep them unchanged, re
 
 This supports [OpenCode Go with official DeepSeek fallback](https://github.com/elleqt/llm-proxy-backend#opencode-go-with-official-deepseek-fallback) without a separate provider type. Users keep ordinary DeepSeek client configuration against the gateway. Shared aliases still require access on every serving provider.
 
+### Unknown upstream error masking
+
+**Admin → Settings → Mask unknown upstream errors** is enabled by default and saves immediately. It hides unclassified HTTP 5xx diagnostics behind a clear upstream error without changing statuses, recognized failure reasons, retry delays, successful responses or active streams. Auth-selection wrappers keep their code and timing while nested diagnostics are replaced by a safe message.
+
+Explicitly turning it off is preserved across reloads and restarts; changing cost visibility does not reset it. Disable it only for diagnostics, since original errors can contain provider internals. This is a gateway preference, not an upstream YAML option.
+
 
 ## Screenshots
 

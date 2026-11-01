@@ -4,6 +4,7 @@ import type { components } from "../../shared/api/schema";
 
 export type Config = components["schemas"]["Config"];
 export type AdminConfig = components["schemas"]["AdminConfig"];
+export type AdminConfigUpdate = components["schemas"]["AdminConfigUpdate"];
 
 /**
  * The deployment's settings the user's interface is rendered with: where the

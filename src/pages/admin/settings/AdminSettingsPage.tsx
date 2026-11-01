@@ -10,6 +10,7 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { CostsVisibility } from "./CostsVisibility";
 import { DefaultLimits } from "./DefaultLimits";
 import { Prices } from "./Prices";
+import { UnknownErrorMasking } from "./UnknownErrorMasking";
 import styles from "../admin.module.css";
 
 export function AdminSettingsPage() {
@@ -30,6 +31,7 @@ export function AdminSettingsPage() {
           )}
         </Card>
         <SessionAffinityControl />
+        <UnknownErrorMasking />
         <CostsVisibility />
         <DefaultLimits />
         <Prices />
