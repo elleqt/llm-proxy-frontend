@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { adminConfigQuery, configQuery, type AdminConfig } from "../../../entities/config/config";
+import { adminConfigQuery, configQuery, type AdminConfigUpdate } from "../../../entities/config/config";
 import { client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useT } from "../../../shared/i18n";
 import { Card, Spinner, Toggle } from "../../../shared/ui";
@@ -12,12 +12,14 @@ export function CostsVisibility() {
   const queryClient = useQueryClient();
   const config = useQuery(adminConfigQuery);
   const save = useMutation({
-    mutationFn: (body: AdminConfig) => unwrap(client.PUT("/api/admin/config", { body })),
-    onSuccess: (saved) => {
+    mutationFn: (body: AdminConfigUpdate) => unwrap(client.PUT("/api/admin/config", { body })),
+    onSuccess: async (saved) => {
+      await queryClient.cancelQueries({ queryKey: adminConfigQuery.queryKey });
       queryClient.setQueryData(adminConfigQuery.queryKey, saved);
       // The interface's own config follows from it.
       void queryClient.invalidateQueries({ queryKey: configQuery.queryKey });
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: adminConfigQuery.queryKey }),
   });
   return (
     <Card title={t("settings.costs")}>

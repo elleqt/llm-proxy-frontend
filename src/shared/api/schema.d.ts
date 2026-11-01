@@ -613,7 +613,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getAdminConfig"];
-        /** Replace them. Applies to every user from their next request; the change is audited. */
+        /** Update supplied response-visibility preferences. Omitted fields remain unchanged; the change is audited. */
         put: operations["replaceAdminConfig"];
         post?: never;
         delete?: never;
@@ -780,6 +780,12 @@ export interface components {
         AdminConfig: {
             /** @description Show users their costs in US dollars: in the cabinet, and the amount in the proxied API's spend-limit refusal. Off by default. */
             costsVisible: boolean;
+            /** @description Mask unrecognized upstream HTTP 5xx error details. On by default; recognized errors, HTTP 200, 4xx and committed streams are unchanged. */
+            maskUnknownErrors: boolean;
+        };
+        AdminConfigUpdate: {
+            costsVisible?: boolean;
+            maskUnknownErrors?: boolean;
         };
         AdminUser: {
             /** Format: uuid */
@@ -2611,7 +2617,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The settings an administrator edits for what users are shown. */
+            /** @description Global response-visibility preferences for administrators. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2631,17 +2637,26 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AdminConfig"];
+                "application/json": components["schemas"]["AdminConfigUpdate"];
             };
         };
         responses: {
-            /** @description Replaced. */
+            /** @description Updated preferences. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["AdminConfig"];
+                };
+            };
+            /** @description No preference was supplied (`invalid_input`, field `fields`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

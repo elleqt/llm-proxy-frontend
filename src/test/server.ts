@@ -21,7 +21,7 @@ export const server = setupServer(
     response(200).json({ providers: [{ name: "claude", models: ["claude-sonnet-5"] }] }),
   ),
   http.get("/api/me/limits", ({ response }) => response(200).json(fixtures.myLimits())),
-  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible: false })),
+  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible: false, maskUnknownErrors: true })),
   http.get("/api/admin/settings", ({ response }) => response(200).json({
     yaml: "routing:\n  session-affinity: true\n",
     fields: { proxyURL: "", requestRetry: 3, maxRetryInterval: 30, sessionAffinity: true },

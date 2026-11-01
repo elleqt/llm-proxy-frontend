@@ -498,6 +498,7 @@ function limitsView(userId: string): Schemas["SpendLimits"] {
 
 /** The administrator's setting: users see their costs in US dollars. Off, as on a fresh install. */
 let costsVisible = false;
+let maskUnknownErrors = true;
 
 /** Whether the signed-in caller is shown dollars: always an administrator, otherwise per the setting. */
 function costsVisibleToMe(): boolean {
@@ -1085,10 +1086,12 @@ const handlers = [
     if (!body.dryRun) settings = next;
     return response(200).json({ applied: !body.dryRun, diff, settings: next });
   }),
-  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible })),
+  http.get("/api/admin/config", ({ response }) => response(200).json({ costsVisible, maskUnknownErrors })),
   http.put("/api/admin/config", async ({ request, response }) => {
-    ({ costsVisible } = await request.json());
-    return response(200).json({ costsVisible });
+    const patch = await request.json();
+    if (patch.costsVisible !== undefined) costsVisible = patch.costsVisible;
+    if (patch.maskUnknownErrors !== undefined) maskUnknownErrors = patch.maskUnknownErrors;
+    return response(200).json({ costsVisible, maskUnknownErrors });
   }),
   http.get("/api/admin/limits", ({ response }) => response(200).json(defaultLimits)),
   http.put("/api/admin/limits", async ({ request, response }) => {

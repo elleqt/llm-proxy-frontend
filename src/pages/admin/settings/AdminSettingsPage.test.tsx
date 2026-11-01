@@ -6,7 +6,7 @@ import { settingsQuery } from "../../../entities/settings/settings";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { renderApp } from "../../../test/render";
-import { fixtures, http, server, type Schemas } from "../../../test/server";
+import { errorResponse, fixtures, http, server, type Schemas } from "../../../test/server";
 
 const SETTINGS: Schemas["Settings"] = {
   yaml: "request-retry: 3\nmax-retry-interval: 30\n",
@@ -135,13 +135,14 @@ describe("gateway settings", () => {
 describe("costs shown to users", () => {
   it("reads the setting, saves the switched value and shows what the server kept", async () => {
     settingsScreen();
-    let stored: Schemas["AdminConfig"] = { costsVisible: false };
-    const puts: Schemas["AdminConfig"][] = [];
+    let stored: Schemas["AdminConfig"] = { costsVisible: false, maskUnknownErrors: false };
+    const puts: Schemas["AdminConfigUpdate"][] = [];
     server.use(
       http.get("/api/admin/config", ({ response }) => response(200).json(stored)),
       http.put("/api/admin/config", async ({ request, response }) => {
-        stored = await request.json();
-        puts.push(stored);
+        const patch = await request.json();
+        stored = { ...stored, ...patch };
+        puts.push(patch);
         return response(200).json(stored);
       }),
     );
@@ -156,6 +157,7 @@ describe("costs shown to users", () => {
 
     await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
     expect(puts).toEqual([{ costsVisible: true }]);
+    expect(screen.getByRole("switch", { name: en["settings.maskUnknownErrors"] })).not.toBeChecked();
     expect(queryClient.getQueryState(configQuery.queryKey)?.isInvalidated).toBe(true);
   });
 });
@@ -275,4 +277,42 @@ it("does not let an older settings read undo a successfully saved switch", async
   await waitFor(() => expect(toggle).not.toBeChecked());
   await act(async () => { release(); await refetch; });
   expect(toggle).not.toBeChecked();
+});
+
+describe("unknown upstream error masking", () => {
+  it("defaults on, saves explicit off, and preserves it without changing cost visibility", async () => {
+    settingsScreen();
+    let stored: Schemas["AdminConfig"] = { costsVisible: true, maskUnknownErrors: true };
+    server.use(
+      http.get("/api/admin/config", ({ response }) => response(200).json(stored)),
+      http.put("/api/admin/config", async ({ request, response }) => {
+        stored = { ...stored, ...await request.json() };
+        return response(200).json(stored);
+      }),
+    );
+    const user = userEvent.setup();
+    const view = renderApp("/admin/settings");
+    const toggle = await screen.findByRole("switch", { name: en["settings.maskUnknownErrors"] });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(stored.costsVisible).toBe(true);
+    expect(screen.getByRole("switch", { name: en["settings.costsVisible"] })).toBeChecked();
+    view.unmount();
+    renderApp("/admin/settings");
+    expect(await screen.findByRole("switch", { name: en["settings.maskUnknownErrors"] })).not.toBeChecked();
+  });
+
+  it("retains the saved preference after a failed write and shows a stable error", async () => {
+    settingsScreen();
+    server.use(http.put("/api/admin/config", ({ response }) => response.untyped(errorResponse(503, {
+      code: "internal_error", message: "private provider diagnostics",
+    }))));
+    const user = userEvent.setup();
+    renderApp("/admin/settings");
+    const toggle = await screen.findByRole("switch", { name: en["settings.maskUnknownErrors"] });
+    await user.click(toggle);
+    expect(await screen.findByRole("alert")).not.toHaveTextContent("private provider diagnostics");
+    expect(toggle).toBeChecked();
+  });
 });
