@@ -10,14 +10,14 @@ This is the web interface of llm-proxy, a self-hosted gateway that lets a team s
 
 - **Cabinet** — sign in with a password or through your OIDC identity provider; issue and revoke API keys; usage over 24 hours, 7 or 30 days in tokens, or also in dollars with the estimated cost split into input, output, cache reads and cache writes and what the prompt cache saved, when the administrator lets users see costs; your spend limits with the share of each used and when it resets; the models your access rules allow.
 - **Connect** — ready-made configuration for Claude Code, omp and curl (OpenAI-compatible API), filled in with the gateway's address.
-- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's spend limits, keys, recent requests and audit events; vendor accounts with quotas, usage roles and an immediate sticky-session switch; subscription sign-in or OpenAI-compatible model discovery through **Add provider**; outbound proxy and retries as fields or YAML with a server-side check before applying; default spend limits, cost visibility, and model prices.
+- **Admin panel** — users and service accounts with per-user access rules (`<provider>:<model-glob>`, e.g. `chatgpt:*`, `claude:claude-sonnet-*`) and a preview of the models they cover; each user's spend limits, keys, recent requests and audit events; vendor accounts with quotas and usage roles; subscription sign-in or OpenAI-compatible model discovery through **Add provider**; global gateway settings, including the immediate sticky-session switch, in **Settings**; outbound proxy and retries as fields or YAML with a server-side check before applying; default spend limits, cost visibility, and model prices.
 - English and Russian; four themes: system, light, pink, dark.
 
 ### Account routing roles
 
 Every subscription and compatible account has a **Usage role** in its row: **Preferred**, **Normal** (the default), or **Reserve**. Changes save immediately. Accounts serving the same model use the highest available role; equal roles share new sessions through the configured strategy (round-robin by default). A second ChatGPT account starts as Normal and joins that pool. Both account editors retain custom signed priorities behind a disclosure without silently replacing existing values.
 
-The **Sticky sessions** switch is at the top of **Providers**, on by default, and saves immediately. Explicitly turning it off is preserved. Established sessions keep their available account despite role changes; failover can move them. This is the same setting as `routing.session-affinity` in Settings YAML, not an independent preference.
+The **Sticky sessions** switch is in **Admin → Settings**, on by default, and saves immediately. Explicitly turning it off is preserved. Established sessions keep their available account despite role changes; failover can move them. This is the same setting as `routing.session-affinity` in Settings YAML, not an independent preference. Providers contains account-specific roles, not this global switch.
 
 Compatible secret HTTP headers remain in the editor's **Advanced** section.
 
