@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent } from "react";
 import { settingsQuery, type Settings, type SettingsUpdateRequest } from "../../../entities/settings/settings";
+import { SessionAffinityControl } from "../../../features/provider-routing/SessionAffinityControl";
 import { ApiError, client, unwrap } from "../../../shared/api/client";
 import { useErrorMessage, useT } from "../../../shared/i18n";
 import { fill } from "../../../shared/lib/template";
@@ -28,6 +29,7 @@ export function AdminSettingsPage() {
             <SettingsEditor settings={settings.data} />
           )}
         </Card>
+        <SessionAffinityControl />
         <CostsVisibility />
         <DefaultLimits />
         <Prices />
@@ -59,7 +61,8 @@ function SettingsEditor({ settings }: { settings: Settings }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"fields" | "yaml">("fields");
   const [fields, setFields] = useState(() => fieldValues(settings));
-  const [yaml, setYaml] = useState(settings.yaml);
+  const [yamlDraft, setYamlDraft] = useState<string | null>(null);
+  const yaml = yamlDraft ?? settings.yaml;
   const [checked, setChecked] = useState<{ key: string; diff: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -106,7 +109,7 @@ function SettingsEditor({ settings }: { settings: Settings }) {
         onSuccess: (result) => {
           queryClient.setQueryData(settingsQuery.queryKey, result.settings);
           setFields(fieldValues(result.settings));
-          setYaml(result.settings.yaml);
+          setYamlDraft(null);
           setChecked(null);
           setConfirming(false);
           setApplied(true);
@@ -189,7 +192,7 @@ function SettingsEditor({ settings }: { settings: Settings }) {
                 value={yaml}
                 onChange={(value) => {
                   edit();
-                  setYaml(value);
+                  setYamlDraft(value);
                 }}
               />
             ),

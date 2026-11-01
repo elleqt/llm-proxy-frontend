@@ -8,7 +8,6 @@ import { ProxyCell } from "../../../features/account-proxy/ProxyCell";
 import { CompatDrawer } from "../../../features/compat-provider/CompatDrawer";
 import { AddProviderAccount } from "../../../features/provider-login/ProviderLogin";
 import { AccountUsageControl } from "../../../features/provider-routing/AccountUsageControl";
-import { SessionAffinityControl } from "../../../features/provider-routing/SessionAffinityControl";
 import { client, unwrap } from "../../../shared/api/client";
 import type { components } from "../../../shared/api/schema";
 import { useErrorMessage, useT } from "../../../shared/i18n";
@@ -50,7 +49,6 @@ export function AdminProvidersPage() {
         </div>
         {addingCompat && <CompatDrawer onClose={() => setAddingCompat(false)} />}
       </div>
-      <SessionAffinityControl />
       {accounts.isPending ? (
         <Spinner label={t("app.loading")} />
       ) : accounts.isError ? (

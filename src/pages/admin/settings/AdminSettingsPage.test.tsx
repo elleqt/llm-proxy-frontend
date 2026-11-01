@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { configQuery } from "../../../entities/config/config";
+import { settingsQuery } from "../../../entities/settings/settings";
 import { en } from "../../../shared/i18n/en";
 import { fill } from "../../../shared/lib/template";
 import { renderApp } from "../../../test/render";
@@ -212,4 +213,66 @@ describe("default spend limits", () => {
 
     expect(await within(await region()).findByText(en["limits.none"])).toBeInTheDocument();
   });
+});
+  it("saves sticky sessions immediately without overwriting unrelated settings", async () => {
+    settingsScreen();
+    let settings = { yaml: "request-retry: 7\n", fields: { sessionAffinity: true, requestRetry: 7, proxyURL: "", maxRetryInterval: 30 } };
+    server.use(
+      http.get("/api/admin/providers", ({ response }) => response(200).json([fixtures.providerAccount()])),
+      http.get("/api/admin/settings", ({ response }) => response(200).json(settings)),
+      http.put("/api/admin/settings", async ({ request, response }) => {
+        const body = await request.json();
+        expect(body).toEqual({ fields: { sessionAffinity: false }, dryRun: false });
+        settings = { ...settings, yaml: "request-retry: 7\nrouting:\n  session-affinity: false\n", fields: { ...settings.fields, ...body.fields } };
+        return response(200).json({ settings, diff: "", applied: true });
+      }),
+    );
+    const user = userEvent.setup();
+    const view = renderApp("/admin/settings");
+    const toggle = await screen.findByRole("switch", { name: en["settings.sessionAffinity"] });
+    expect(toggle).toBeChecked();
+    const retries = screen.getByLabelText(en["settings.requestRetry"]);
+    await user.clear(retries);
+    await user.type(retries, "8");
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(settings.fields.requestRetry).toBe(7);
+    expect(retries).toHaveValue("8");
+    await user.click(screen.getByRole("tab", { name: en["settings.yaml"] }));
+    expect(screen.getByLabelText(en["settings.yamlLabel"])).toHaveValue(settings.yaml);
+    view.unmount();
+    const providerView = renderApp("/admin/providers");
+    await screen.findByRole("combobox");
+    expect(screen.queryByRole("switch", { name: en["settings.sessionAffinity"] })).not.toBeInTheDocument();
+    providerView.unmount();
+    renderApp("/admin/settings");
+    expect(await screen.findByRole("switch", { name: en["settings.sessionAffinity"] })).not.toBeChecked();
+  });
+it("does not let an older settings read undo a successfully saved switch", async () => {
+  settingsScreen();
+  const oldSettings = { yaml: "", fields: { sessionAffinity: true } };
+  let release!: () => void;
+  let started!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const reading = new Promise<void>((resolve) => { started = resolve; });
+  const user = userEvent.setup();
+  const { queryClient } = renderApp("/admin/settings");
+  await screen.findByRole("switch", { name: en["settings.sessionAffinity"] });
+  server.use(
+    http.get("/api/admin/settings", async ({ response }) => {
+      started();
+      await blocked;
+      return response(200).json(oldSettings);
+    }),
+    http.put("/api/admin/settings", ({ response }) => response(200).json({
+      applied: true, diff: "", settings: { yaml: "", fields: { sessionAffinity: false } },
+    })),
+  );
+  const refetch = queryClient.refetchQueries({ queryKey: settingsQuery.queryKey });
+  await reading;
+  const toggle = screen.getByRole("switch", { name: en["settings.sessionAffinity"] });
+  await user.click(toggle);
+  await waitFor(() => expect(toggle).not.toBeChecked());
+  await act(async () => { release(); await refetch; });
+  expect(toggle).not.toBeChecked();
 });

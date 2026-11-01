@@ -1,7 +1,6 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { settingsQuery } from "../../entities/settings/settings";
 import { en } from "../../shared/i18n/en";
 import { renderApp } from "../../test/render";
 import { errorResponse, fixtures, http, server } from "../../test/server";
@@ -57,56 +56,5 @@ describe("provider routing", () => {
     expect(stored().priority).toBe(1);
   });
 
-  it("saves sticky sessions immediately without overwriting unrelated settings", async () => {
-    providers();
-    let settings = { yaml: "request-retry: 7\n", fields: { sessionAffinity: true, requestRetry: 7, proxyURL: "", maxRetryInterval: 30 } };
-    server.use(
-      http.get("/api/admin/settings", ({ response }) => response(200).json(settings)),
-      http.put("/api/admin/settings", async ({ request, response }) => {
-        const body = await request.json();
-        expect(body).toEqual({ fields: { sessionAffinity: false }, dryRun: false });
-        settings = { ...settings, fields: { ...settings.fields, ...body.fields } };
-        return response(200).json({ settings, diff: "", applied: true });
-      }),
-    );
-    const user = userEvent.setup();
-    const view = renderApp("/admin/providers");
-    const toggle = await screen.findByRole("switch", { name: en["settings.sessionAffinity"] });
-    expect(toggle).toBeChecked();
-    await user.click(toggle);
-    await waitFor(() => expect(toggle).not.toBeChecked());
-    expect(settings.fields.requestRetry).toBe(7);
-    view.unmount();
-    renderApp("/admin/providers");
-    expect(await screen.findByRole("switch", { name: en["settings.sessionAffinity"] })).not.toBeChecked();
-  });
 });
 
-it("does not let an older settings read undo a successfully saved switch", async () => {
-  providers();
-  const oldSettings = { yaml: "", fields: { sessionAffinity: true } };
-  let release!: () => void;
-  let started!: () => void;
-  const blocked = new Promise<void>((resolve) => { release = resolve; });
-  const reading = new Promise<void>((resolve) => { started = resolve; });
-  const user = userEvent.setup();
-  const { queryClient } = renderApp("/admin/providers");
-  await screen.findByRole("switch", { name: en["settings.sessionAffinity"] });
-  server.use(
-    http.get("/api/admin/settings", async ({ response }) => {
-      started();
-      await blocked;
-      return response(200).json(oldSettings);
-    }),
-    http.put("/api/admin/settings", ({ response }) => response(200).json({
-      applied: true, diff: "", settings: { yaml: "", fields: { sessionAffinity: false } },
-    })),
-  );
-  const refetch = queryClient.refetchQueries({ queryKey: settingsQuery.queryKey });
-  await reading;
-  const toggle = screen.getByRole("switch", { name: en["settings.sessionAffinity"] });
-  await user.click(toggle);
-  await waitFor(() => expect(toggle).not.toBeChecked());
-  await act(async () => { release(); await refetch; });
-  expect(toggle).not.toBeChecked();
-});
