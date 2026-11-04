@@ -463,7 +463,7 @@ export const en = {
   "compat.pickModels": "Pick at least one model to serve.",
   "compat.levels": "Reasoning levels",
   "compat.levelsHint":
-    "The `reasoning_effort` values the gateway passes to this provider's models unchanged. The client picks the level per request: `none` turns reasoning off, `high` asks for longer thinking. A standard level not on the list is replaced with the nearest one on it, so the vendor does not reject it; an unknown value not on the list is refused. The default set suits most vendors (Ollama, DeepSeek). Turn off a level only if the vendor refuses it; add your own if the vendor knows a level that is not listed.",
+    "Declares this provider's model capabilities to CLIProxyAPI; it does not choose the effort for a request. The client chooses `reasoning_effort`. An unsupported explicit level in an OpenAI-compatible request returns HTTP 400 before reaching the vendor. Other protocols and special modes follow the SDK's translation rules. Without a custom list, the gateway declares its default set, including `max`. Add only values the vendor accepts: a custom name does not enable a new capability or define a token budget.",
   "compat.levelsDefault": "default",
   "compat.levelsOwn": "own list",
   "compat.levelsReset": "Reset",

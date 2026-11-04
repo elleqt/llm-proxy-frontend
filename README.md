@@ -23,6 +23,8 @@ Compatible secret HTTP headers remain in the editor's **Advanced** section.
 
 The editor shows saved header names, never their values. Keep them unchanged, replace the whole map, or remove it; changing the base URL requires explicitly replacing or removing the saved headers. Failed discovery leaves manually entered models and unsaved settings intact. Conversation-dependent header variables may be omitted during discovery, so some vendors need manual model entry.
 
+The **Reasoning levels** setting in **Advanced** declares model capabilities to CLIProxyAPI, not the effort for a request; the client chooses `reasoning_effort`. With CLIProxyAPI v8.0.53, an explicit unsupported level in an OpenAI-compatible request returns HTTP 400 before reaching the vendor instead of being replaced with a nearby level. Other protocols and special modes follow the SDK's translation rules. Without a custom list the gateway declares its default set, including `max`, rather than enabling unrestricted passthrough. Add only values the vendor already accepts: a custom name does not enable a vendor feature or define a numeric thinking budget. Model discovery does not automatically populate this list.
+
 This supports [OpenCode Go with official DeepSeek fallback](https://github.com/elleqt/llm-proxy-backend#opencode-go-with-official-deepseek-fallback) without a separate provider type. Users keep ordinary DeepSeek client configuration against the gateway. Shared aliases still require access on every serving provider.
 
 ### Unknown upstream error masking

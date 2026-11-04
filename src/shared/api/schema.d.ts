@@ -942,11 +942,11 @@ export interface components {
             name: string;
             /** @description The name clients request it by; absent serves it as `name`. */
             alias?: string;
-            /** @description The `reasoning_effort` values passed to the vendor unchanged. A standard level off the list becomes the nearest listed one, so the vendor does not reject it; an unknown value off the list is refused. Known levels are kept in canonical order. Absent: the default set (`CompatDefaults`). Responses carry it only for a model's own list. */
+            /** @description Model capability levels declared to CLIProxyAPI, not the effort selected for a request. The client selects `reasoning_effort`. An explicit unsupported level in an OpenAI-compatible request is refused with HTTP 400 before contacting the vendor. Other protocols and special modes follow the SDK's reasoning translation. Adding a custom name neither enables vendor support nor defines a numeric token budget. Known levels are kept in canonical order. Absent: the gateway declares its default set (`CompatDefaults`), including `max`; absence does not enable unrestricted passthrough. Responses carry this field only for a model's own list. */
             reasoningLevels?: string[];
         };
         CompatDefaults: {
-            /** @description The reasoning levels a model without its own list passes unchanged. */
+            /** @description The capability levels declared to CLIProxyAPI for a model without its own list. Includes `max`; this does not choose the request's effort or enable unrestricted passthrough. */
             reasoningLevels: string[];
         };
         /** @description Secret custom HTTP headers. Omission preserves saved headers on update or discovery; an empty object removes them, and a nonempty object replaces the full map. Saved headers are bound to the provider's base URL. Unresolved dynamic values are omitted during model discovery; inference uses upstream header expansion. */
